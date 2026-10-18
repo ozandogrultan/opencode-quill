@@ -15,6 +15,7 @@ Closes #
 
 - [ ] `bun run test` passes.
 - [ ] `bun run typecheck` passes.
+- [ ] `bun run lint:sh` and `bash scripts/changelog.sh check` pass.
 - [ ] Read the README and AGENTS.md; this change preserves composer gating,
       accept-key behaviour, and native undo.
 - [ ] I updated the docs (README / CHANGELOG) where behaviour changed.
