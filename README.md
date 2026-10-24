@@ -21,6 +21,13 @@ As you type, Quill predicts the remainder of your current prose word or the next
 word in sequence, shown as dimmed inline ghost text directly at your cursor.
 Press <kbd>Tab</kbd> or <kbd>→</kbd> to accept it, or <kbd>Esc</kbd> to dismiss.
 
+<p align="center">
+  <img src="assets/demo.gif" alt="quill: completing words and correcting a typo as you type" width="800">
+</p>
+
+**Install:** add `"opencode-quill"` to `plugins` in `~/.config/opencode/cli.json`
+and restart OpenCode ([details](#install)).
+
 ## What it does
 
 - **Zero AI, completely local:** Runs entirely on-device without sending prompt
@@ -91,6 +98,17 @@ A correction looks like this, with only ` → complete` dimmed:
 - **Earlier words are never rewritten.** With learned evidence for
   `please run tests`, typing `please rnu ` can suggest `tests`. Accepting it
   produces `please rnu tests`, leaving `rnu` unchanged.
+
+## Quill or Ghost?
+
+|             | quill                                          | [ghost](https://github.com/ozandogrultan/opencode-ghost) |
+| ----------- | ---------------------------------------------- | -------------------------------------------------------- |
+| Suggests    | the rest of the current word, or the next word | your whole next prompt                                    |
+| When        | while you type a draft                         | the composer is empty, after a turn                       |
+| How         | a local n-gram model, no network               | a small model reads the recent conversation               |
+| Model calls | none                                           | one per turn                                              |
+
+Install both: each activates only in its own domain, with no key conflicts.
 
 ## Requirements
 
@@ -316,6 +334,12 @@ bun run test        # Unit tests and changelog checks
 bun run typecheck   # Type verification (tsc --noEmit)
 bun run lint:sh     # Syntax verification on shell scripts
 ```
+
+## More OpenCode plugins
+
+- [sesh](https://github.com/ozandogrultan/opencode-sesh) — search, preview, and resume every session across every project.
+- [ghost](https://github.com/ozandogrultan/opencode-ghost) — suggests your next prompt as ghost text in the empty composer.
+- [ember](https://github.com/ozandogrultan/opencode-ember) — prices a cold prompt-cache rewrite before you send.
 
 ## Contributing
 
