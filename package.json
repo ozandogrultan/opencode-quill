@@ -1,6 +1,6 @@
 {
   "name": "opencode-quill",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "OpenCode prompt autocomplete: local n-gram word and next-word prediction shown as inline ghost text in the TUI composer, accepted with Tab.",
   "type": "module",
   "license": "MIT",
