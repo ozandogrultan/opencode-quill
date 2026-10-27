@@ -51,8 +51,8 @@
     "prepublishOnly": "bun run test && bun run typecheck"
   },
   "dependencies": {
-    "@opentui/core": "^0.6.6",
-    "@opentui/solid": "^0.6.6",
+    "@opentui/core": "^0.7.0",
+    "@opentui/solid": "^0.7.0",
     "subtlex-word-frequencies": "2.0.0"
   },
   "peerDependencies": {
@@ -62,7 +62,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
-    "@opencode/plugin": "2.1.2",
+    "@opencode/plugin": "2.2.0",
     "@types/bun": "^1.4.2",
     "@types/node": "26.6.5",
     "husky": "^9.1.7",

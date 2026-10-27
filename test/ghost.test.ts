@@ -325,7 +325,7 @@ test("wrapped, scrolled and resized cursor rows paint only when the whole ghost 
   fixture.editor.setText("please please please please comp")
   fixture.editor.gotoBufferEnd()
   await fixture.renderOnce()
-  expect(fixture.editor.visualCursor.visualRow).toBeGreaterThan(0)
+  expect(fixture.editor.visualCursor.logicalCol).toBeGreaterThan(fixture.editor.width)
   expect(fixture.captureCharFrame()).toContain("complete")
   expect(fixture.ghost.accept()).toBe(true)
   expect(fixture.editor.plainText).toBe("please please please please complete")
