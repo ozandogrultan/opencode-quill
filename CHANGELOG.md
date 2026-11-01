@@ -4,6 +4,12 @@ All notable changes are documented in this file using
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.3] - 2026-11-01
+
+### Fixed
+
+- **deps:** Support @opentui 0.8 on OpenCode >= 2.2.3 (#17)
+
 ## [0.6.2] - 2026-10-27
 
 ### Fixed
@@ -145,6 +151,7 @@ All notable changes are documented in this file using
 - `/quill` command and command palette action to toggle autocomplete.
 - Local installer script, full test suite, CI workflows, and release tooling.
 
+[0.6.3]: https://github.com/ozandogrultan/opencode-quill/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/ozandogrultan/opencode-quill/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ozandogrultan/opencode-quill/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ozandogrultan/opencode-quill/compare/v0.5.2...v0.6.0
