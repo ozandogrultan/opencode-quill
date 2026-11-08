@@ -30,13 +30,13 @@ test("saturated context maps keep learning new phrases", () => {
 })
 
 function complete(predictor: WordPredictor, text: string) {
-  return predictor.complete(completionQuery(text, text.length)!)
+  return predictor.candidates(completionQuery(text, text.length)!, 1)[0]
 }
 
 test("ranked candidates are bounded, confident, and keep the original best completion", () => {
   const predictor = new WordPredictor([{ word: "complete", count: 6 }, { word: "compare", count: 4 }, { word: "company", count: 0.1 }])
   const query = completionQuery("please comp", 11)!
-  const best = predictor.complete(query)!
+  const best = predictor.candidates(query, 1)[0]!
   const ranked = predictor.candidates(query)
   expect(ranked[0]).toEqual(best)
   expect(ranked.map(({ word }) => word)).toEqual(["complete", "compare"])
@@ -47,7 +47,7 @@ test("ranked candidates are bounded, confident, and keep the original best compl
   expect(many.candidates(completionQuery("wo", 2)!, 100)).toEqual([])
   for (const text of ["the", "json", "fucn", "please "]) {
     const query = completionQuery(text, text.length)!
-    const best = predictor.complete(query)
+    const best = predictor.candidates(query, 1)[0]
     expect(predictor.candidates(query).slice(0, 1)).toEqual(best ? [best] : [])
   }
 })
@@ -59,15 +59,15 @@ test("repeated JSON save and restore preserves dedupe, casing and ranked predict
   model.observe(prompts)
   predictor.setPersonal(model.snapshot())
   const query = completionQuery("ask oz", 6)!
-  const expected = predictor.complete(query)
+  const expected = predictor.candidates(query, 1)[0]
   const snapshot = model.snapshot()
   for (let round = 0; round < 5; round++) {
     model = new PersonalModel(JSON.parse(JSON.stringify(model.snapshot())))
     expect(model.observe(prompts)).toBe(false)
     expect(model.snapshot()).toEqual(snapshot)
     predictor.setPersonal(model.snapshot())
-    expect(predictor.complete(query)).toEqual(expected)
-    expect(predictor.complete(completionQuery("ask Ozan ", 9)!)).toMatchObject({ word: "today" })
+    expect(predictor.candidates(query, 1)[0]).toEqual(expected)
+    expect(predictor.candidates(completionQuery("ask Ozan ", 9)!, 1)[0]).toMatchObject({ word: "today" })
   }
   expect(expected).toMatchObject({ suffix: "Ozan", replace: 2 })
 })
@@ -422,7 +422,7 @@ test("capitalizes a single lowercase i before a learned contraction", () => {
     const predictor = new WordPredictor([])
     predictor.setPersonal(model.snapshot())
     expect(complete(predictor, "think i")).toMatchObject({ word, suffix: `I${word.slice(1)}`, replace: 1 })
-    expect(predictor.complete({ before: "think ", prefix: "i", next: false })).toEqual(complete(predictor, "think i"))
+    expect(predictor.candidates({ before: "think ", prefix: "i", next: false }, 1)[0]).toEqual(complete(predictor, "think i"))
   }
 })
 
@@ -512,7 +512,7 @@ test("completes learned hyphenated words, brand names and filenames from real vo
   model.observe(texts.map((text, index) => ({ id: String(index), text })))
   const predictor = new WordPredictor(frequencies)
   predictor.setPersonal(model.snapshot())
-  const complete = (text: string) => predictor.complete(completionQuery(text, text.length)!)
+  const complete = (text: string) => predictor.candidates(completionQuery(text, text.length)!, 1)[0]
   expect(complete("fix doc-")).toMatchObject({ suffix: "drift", word: "doc-drift" })
   expect(complete("fix doc")).toMatchObject({ word: "doc-drift" })
   expect(complete("we use Open")).toMatchObject({ suffix: "Code", word: "opencode" })
@@ -526,7 +526,7 @@ test("a hyphenated or dotted learned word does not hide its shorter stem", () =>
   model.observe(Array.from({ length: 2 }, (_, index) => ({ id: `b${index}`, text: "alpha zzdoc beta" })))
   const predictor = new WordPredictor([])
   predictor.setPersonal(model.snapshot())
-  expect(predictor.complete(completionQuery("alpha ", 6)!)).toMatchObject({ word: "zzdoc" })
+  expect(predictor.candidates(completionQuery("alpha ", 6)!, 1)[0]).toMatchObject({ word: "zzdoc" })
 })
 
 test("sentence starts are judged on masked text, so a leading slash command does not make a capital mid-sentence", () => {
@@ -543,7 +543,7 @@ test("sentence starts are judged on masked text, so a leading slash command does
   model.observe(Array.from({ length: 3 }, (_, index) => ({ id: String(index), text: "/btw Please ship it" })))
   const predictor = new WordPredictor(frequencies)
   predictor.setPersonal(model.snapshot())
-  expect(predictor.complete(completionQuery("ship pl", 7)!)).toMatchObject({ suffix: "ease", word: "please" })
+  expect(predictor.candidates(completionQuery("ship pl", 7)!, 1)[0]).toMatchObject({ suffix: "ease", word: "please" })
 })
 
 test("a trigram context whose continuations were each seen once does not discount the bigram", () => {
@@ -598,5 +598,14 @@ test("dropping only the learned casing keeps vocabulary and phrases", () => {
   expect(complete(predictor, "we like Ope")).toMatchObject({ suffix: "nCode" })
   predictor.setPersonal({ ...snapshot, forms: [] })
   expect(complete(predictor, "we like ope")).toMatchObject({ suffix: "ncode", word: "opencode" })
-  expect(predictor.complete(completionQuery("we like ", 8)!)).toMatchObject({ word: "opencode" })
+  expect(predictor.candidates(completionQuery("we like ", 8)!, 1)[0]).toMatchObject({ word: "opencode" })
+})
+
+test("replaces the word when its learned casing changes length under lowercasing", () => {
+  const predictor = new WordPredictor([{ word: "is", count: 10 }])
+  const model = new PersonalModel()
+  model.observe(Array.from({ length: 6 }, (_, index) => ({ id: String(index), text: "we love İstanbul today" })))
+  predictor.setPersonal(model.snapshot())
+  const text = "we love İs"
+  expect(predictor.candidates(completionQuery(text, text.length)!, 1)[0]).toMatchObject({ suffix: "İstanbul", replace: 2 })
 })
