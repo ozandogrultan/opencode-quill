@@ -2,8 +2,8 @@ export type Options = { enabled: boolean; completeAtLineEnd: boolean; completeSh
 
 function keys(value: unknown, fallback: string[], name: string): string[] {
   if (value === undefined) return fallback
-  if (!Array.isArray(value) || value.some((key) => typeof key !== "string" || !key.trim() || key.includes(","))) {
-    throw new Error(`Quill ${name} must be an array of non-empty keybindings without commas`)
+  if (!Array.isArray(value) || value.some((key) => typeof key !== "string" || !key.trim())) {
+    throw new Error(`Quill ${name} must be an array of non-empty keybindings`)
   }
   return [...new Set(value.map((key: string) => key.trim()))]
 }
