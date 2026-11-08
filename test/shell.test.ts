@@ -29,11 +29,21 @@ test("shell words keep commands, subcommands and flags and drop paths, assignmen
 })
 
 test("commands that look like they carry secrets are never learned or completed", () => {
-  for (const command of ["curl -H 'Authorization: x' api", "export API_KEY foo", "gh auth token", "npm login --password hunter2", "echo sk-abc"]) {
+  for (const command of ["curl -H 'Authorization: x' api", "export API_KEY foo", "gh auth token", "npm login --password hunter2", "echo sk-abc",
+    "mysql -uroot -pHunter2 db", "curl -u admin:hunter2 host", "curl --user=admin:hunter2 host", "export AWS_ACCESS_KEY_ID foo",
+    "echo sk_live_abc", "git clone ghp_abcdef", "echo github_pat_abc", "echo glpat-abc", "slack xoxb-123", "echo eyJhbGciOiJIUzI1NiJ9",
+    "aws AKIAABCDEFGHIJKLMNOP", "curl -b cookie.txt host", "env DB_PWD=x run", "curl -uadmin:pw host", "gpg --passphrase x file",
+    "openssl enc -pass pass:hunter2", "sshpass -p hunter2 ssh host", "docker login -p hunter2", "redis-cli -a hunter2", "zip -P hunter2 a.zip f"]) {
     expect(words(command)).toEqual([])
     expect(query(command + " ")).toBeUndefined()
   }
   expect(words("deploy a1b2c3d4e5f6a7b8c9d0")).toEqual(["deploy"])
+  expect(words("cd ~ && pwd")).toEqual(["cd", "pwd"])
+  expect(words("find . -print")).toEqual(["find", "-print"])
+  expect(words("git push -u origin main")).toEqual(["git", "push", "-u", "origin", "main"])
+  expect(words("docker run -u 1000:1000 img")).toEqual(["docker", "run", "-u", "img"])
+  expect(words("npm i cookie-parser")).toEqual(["npm", "i", "cookie-parser"])
+  expect(words("mysql -P3306 db")).toEqual(["mysql", "-P3306", "db"])
 })
 
 test("shell queries find the flag or word being typed and the next word", () => {
@@ -51,20 +61,20 @@ test("shell queries find the flag or word being typed and the next word", () => 
 
 test("completes learned commands, subcommands and flags with their original case", () => {
   const { predictor } = trained(["git status", "git status --short", "bun install --frozen-lockfile", "Makefile build"])
-  expect(predictor.complete(query("git sta")!)).toMatchObject({ suffix: "tus", word: "status" })
-  expect(predictor.complete(query("git ")!)).toMatchObject({ suffix: "status" })
-  expect(predictor.complete(query("bun install --fro")!)).toMatchObject({ suffix: "zen-lockfile" })
-  expect(predictor.complete(query("bun install --")!)).toMatchObject({ suffix: "frozen-lockfile" })
-  expect(predictor.complete(query("Make")!)).toMatchObject({ suffix: "file" })
-  expect(predictor.complete(query("make")!)).toBeUndefined()
+  expect(predictor.candidates(query("git sta")!, 1)[0]).toMatchObject({ suffix: "tus", word: "status" })
+  expect(predictor.candidates(query("git ")!, 1)[0]).toMatchObject({ suffix: "status" })
+  expect(predictor.candidates(query("bun install --fro")!, 1)[0]).toMatchObject({ suffix: "zen-lockfile" })
+  expect(predictor.candidates(query("bun install --")!, 1)[0]).toMatchObject({ suffix: "frozen-lockfile" })
+  expect(predictor.candidates(query("Make")!, 1)[0]).toMatchObject({ suffix: "file" })
+  expect(predictor.candidates(query("make")!, 1)[0]).toBeUndefined()
 })
 
 test("shell completion never uppercases, capitalizes or corrects typos", () => {
   const { predictor } = trained(["git status --short", "i install"])
-  expect(predictor.complete(query("i ")!)).toMatchObject({ suffix: "install" })
-  expect(predictor.complete(query("git status --SH")!)).toBeUndefined()
-  expect(predictor.complete(query("git statsu")!)).toBeUndefined()
-  expect(predictor.complete(query("git stat")!)?.suffix).toBe("us")
+  expect(predictor.candidates(query("i ")!, 1)[0]).toMatchObject({ suffix: "install" })
+  expect(predictor.candidates(query("git status --SH")!, 1)[0]).toBeUndefined()
+  expect(predictor.candidates(query("git statsu")!, 1)[0]).toBeUndefined()
+  expect(predictor.candidates(query("git stat")!, 1)[0]?.suffix).toBe("us")
 })
 
 test("shell and prose models keep separate vocabularies and snapshots", () => {

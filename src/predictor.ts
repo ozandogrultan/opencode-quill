@@ -212,6 +212,8 @@ export class WordPredictor {
   private bigramTotals = new Map<string, Totals>()
   private trigramTotals = new Map<string, Totals>()
   private vocabulary: string[] = []
+  private known = new Set<string>()
+  private followers = new Map<string, string[]>()
   private forms = new Map<string, string>()
 
   constructor(prior: readonly Frequency[], readonly grammar: Grammar = proseGrammar) {
@@ -245,6 +247,18 @@ export class WordPredictor {
       }
     }
     this.vocabulary = [...new Set([...this.prior.keys(), ...learned.filter((word) => !fragments.has(word))])].sort()
+    this.known = new Set(this.vocabulary)
+    this.followers = new Map()
+    for (const map of [this.personal.bigrams, this.personal.trigrams]) {
+      for (const [key, count] of map) {
+        if (count < 2) continue
+        const split = key.lastIndexOf("\0")
+        const context = key.slice(0, split)
+        const list = this.followers.get(context) ?? []
+        list.push(key.slice(split + 1))
+        this.followers.set(context, list)
+      }
+    }
     const forms = new Map<string, [string, number]>()
     for (const [form, count] of this.personal.forms) {
       const word = this.grammar.normalize(form)
@@ -315,10 +329,6 @@ export class WordPredictor {
     return resolved
   }
 
-  complete(query: CompletionQuery): Prediction | undefined {
-    return this.candidates(query, 1)[0]
-  }
-
   candidates(query: CompletionQuery, limit = 5): Prediction[] {
     const maximum = Number.isFinite(limit) ? Math.max(0, Math.min(5, Math.floor(limit))) : 5
     if (!maximum) return []
@@ -337,10 +347,15 @@ export class WordPredictor {
       (pair ? this.personal.trigrams.get(`${pair}\0${word}`) ?? 0 : 0) >= 2
     const eligible = (word: string) => !query.next || followed(word)
     const candidates = new Map<string, number>()
-    for (let index = lowerBound(this.vocabulary, prefix); index < this.vocabulary.length; index++) {
-      const word = this.vocabulary[index]
-      if (!word.startsWith(prefix)) break
-      if ((query.next || slash === word.includes("/")) && eligible(word)) candidates.set(word, 1)
+    if (query.next) {
+      const next = new Set([...this.followers.get(previous ?? "") ?? [], ...(pair && this.followers.get(pair)) || []])
+      for (const word of [...next].sort()) if (this.known.has(word) && word.startsWith(prefix)) candidates.set(word, 1)
+    } else {
+      for (let index = lowerBound(this.vocabulary, prefix); index < this.vocabulary.length; index++) {
+        const word = this.vocabulary[index]
+        if (!word.startsWith(prefix)) break
+        if (slash === word.includes("/")) candidates.set(word, 1)
+      }
     }
     for (const word of local.keys()) if (!word.includes("/") && word.startsWith(prefix) && (query.next || !slash) && eligible(word)) candidates.set(word, 1)
     const suggest = (): Prediction[] => {
@@ -364,7 +379,7 @@ export class WordPredictor {
         const form = this.forms.get(best) ?? best
         const shouting = this.grammar.prose && query.prefix.length > 1 && query.prefix === query.prefix.toUpperCase()
         if (bestWeight < 1 || (!query.next && best.startsWith("i'") && query.prefix[0] === "i") ||
-          (!query.next && !shouting && form !== best && !form.startsWith(query.prefix))) {
+          (!query.next && ((!shouting && form !== best && !form.startsWith(query.prefix)) || form.length !== best.length))) {
           predictions.push({ suffix: applyCase(query.prefix, form), word: best, confidence, replace: query.prefix.length })
         } else if (query.next) {
           predictions.push({ suffix: this.grammar.prose ? applyCase("", form) : form, word: best, confidence })
