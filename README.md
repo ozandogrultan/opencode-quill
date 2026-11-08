@@ -56,9 +56,10 @@ and restart OpenCode ([details](#install)).
   subcommands and flags from a separate vocabulary learned from the commands
   you ran, never from prose. Shell completion is case-sensitive, never corrects
   typos, and skips paths, quoted strings, `$` expansions, assignments and any
-  command that mentions a token, secret, password, key, cookie or credential,
-  passes `user:pass` or a `mysql -p` password, or contains a recognisable API
-  token (`sk-`, `ghp_`, `glpat-`, `xoxb-`, JWT, AWS key ID). Attachment and pasted-text chips are treated as non-prose:
+  command that mentions a token, secret, password, passphrase, key, cookie or
+  credential, passes a password flag (`curl -u user:pass`, `mysql -p…`,
+  `sshpass -p`, `docker login -p`), or contains a recognisable API token
+  (`sk-`, `ghp_`, `glpat-`, `xoxb-`, JWT, AWS key ID). Attachment and pasted-text chips are treated as non-prose:
   words are still suggested after them, but never inside them, and typo
   replacements are not offered while a chip is present.
 - **End-of-draft by default:** Suggestions appear on a partial word or after a

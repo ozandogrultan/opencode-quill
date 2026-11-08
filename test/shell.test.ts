@@ -32,7 +32,8 @@ test("commands that look like they carry secrets are never learned or completed"
   for (const command of ["curl -H 'Authorization: x' api", "export API_KEY foo", "gh auth token", "npm login --password hunter2", "echo sk-abc",
     "mysql -uroot -pHunter2 db", "curl -u admin:hunter2 host", "curl --user=admin:hunter2 host", "export AWS_ACCESS_KEY_ID foo",
     "echo sk_live_abc", "git clone ghp_abcdef", "echo github_pat_abc", "echo glpat-abc", "slack xoxb-123", "echo eyJhbGciOiJIUzI1NiJ9",
-    "aws AKIAABCDEFGHIJKLMNOP", "curl -b cookie.txt host", "env DB_PWD=x run"]) {
+    "aws AKIAABCDEFGHIJKLMNOP", "curl -b cookie.txt host", "env DB_PWD=x run", "curl -uadmin:pw host", "gpg --passphrase x file",
+    "openssl enc -pass pass:hunter2", "sshpass -p hunter2 ssh host", "docker login -p hunter2", "redis-cli -a hunter2", "zip -P hunter2 a.zip f"]) {
     expect(words(command)).toEqual([])
     expect(query(command + " ")).toBeUndefined()
   }
@@ -40,6 +41,9 @@ test("commands that look like they carry secrets are never learned or completed"
   expect(words("cd ~ && pwd")).toEqual(["cd", "pwd"])
   expect(words("find . -print")).toEqual(["find", "-print"])
   expect(words("git push -u origin main")).toEqual(["git", "push", "-u", "origin", "main"])
+  expect(words("docker run -u 1000:1000 img")).toEqual(["docker", "run", "-u", "img"])
+  expect(words("npm i cookie-parser")).toEqual(["npm", "i", "cookie-parser"])
+  expect(words("mysql -P3306 db")).toEqual(["mysql", "-P3306", "db"])
 })
 
 test("shell queries find the flag or word being typed and the next word", () => {
