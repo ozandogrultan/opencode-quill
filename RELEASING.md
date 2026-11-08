@@ -1,7 +1,8 @@
 # Releasing
 
-[`.github/workflows/release.yml`](.github/workflows/release.yml) does the whole
-job: run tests, publish to npm with provenance, and create the GitHub release.
+[`.github/workflows/release.yml`](.github/workflows/release.yml) runs in two
+jobs: `cut` (manual runs only) bumps, tags and pushes; `publish` runs tests,
+publishes to npm with provenance and creates the GitHub release.
 There are two ways to trigger it.
 
 Development uses [bun](https://bun.sh) (`bun install`, `bun run test`). Publishing
@@ -19,6 +20,8 @@ gh workflow run release.yml -f bump=patch   # or minor / major
 
 That workflow checks out `main`, bumps the version, commits and tags it,
 pushes, publishes to npm, and cuts the GitHub release using the new CHANGELOG section as its notes.
+If publishing fails after the tag is pushed, use **Re-run failed jobs**: the
+publish job retries the existing tag without cutting a new version.
 
 Do this from a green `main` — it releases whatever is there.
 

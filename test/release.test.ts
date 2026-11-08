@@ -11,7 +11,7 @@ test("tagged release rejects a manifest mismatch before querying npm", () => {
   try {
     writeFileSync(join(root, "package.json"), JSON.stringify({ name: "quill-test", version: "1.2.3" }))
     writeFileSync(join(root, "npm"), '#!/bin/sh\necho "npm-called" > npm-called\nexit 0\n', { mode: 0o755 })
-    const run = (tag: string) => spawnSync("bash", ["-e", "-c", script], { cwd: root, encoding: "utf8", env: { ...process.env, GITHUB_REF_NAME: tag, GITHUB_OUTPUT: join(root, "output"), PATH: `${root}:${process.env.PATH}` } })
+    const run = (tag: string) => spawnSync("bash", ["-e", "-c", script], { cwd: root, encoding: "utf8", env: { ...process.env, TAG: tag, GITHUB_OUTPUT: join(root, "output"), PATH: `${root}:${process.env.PATH}` } })
     const mismatch = run("v9.9.9")
     expect(mismatch.status).not.toBe(0)
     expect(mismatch.stdout + mismatch.stderr).toContain("does not match")
