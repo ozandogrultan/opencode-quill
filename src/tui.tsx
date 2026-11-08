@@ -42,15 +42,15 @@ export default Plugin.define({
       return route.type === "home" ? "home" : route.type === "session" ? route.sessionID : undefined
     }
 
-    let found: { marker: BoxRenderable; editor: TextareaRenderable | undefined } | undefined
+    let found: { marker: BoxRenderable; editor: TextareaRenderable | undefined; text: string } | undefined
     const currentEditor = () => {
       const key = routeKey()
       const composer = key && composers.get(key)
       if (!composer) return
       const cached = found?.marker === composer.marker && found.editor
-      if (cached && !cached.isDestroyed && !composer.marker.isDestroyed && cached.parent && !cached.parent.isDestroyed) return cached
+      if (cached && !cached.isDestroyed && !composer.marker.isDestroyed && cached.parent && !cached.parent.isDestroyed && cached.plainText === found!.text) return cached
       const editor = findComposer(composer.marker, (node): node is TextareaRenderable => node instanceof TextareaRenderable && !(node instanceof InputRenderable))
-      found = { marker: composer.marker, editor }
+      found = { marker: composer.marker, editor, text: editor?.plainText ?? "" }
       return editor
     }
 

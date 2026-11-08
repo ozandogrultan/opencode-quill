@@ -609,3 +609,12 @@ test("replaces the word when its learned casing changes length under lowercasing
   const text = "we love İs"
   expect(predictor.candidates(completionQuery(text, text.length)!, 1)[0]).toMatchObject({ suffix: "İstanbul", replace: 2 })
 })
+
+test("shouted length-changing casing replaces the whole word in capitals", () => {
+  const predictor = new WordPredictor([{ word: "is", count: 10 }])
+  const model = new PersonalModel()
+  model.observe(Array.from({ length: 6 }, (_, index) => ({ id: String(index), text: "we love İstanbul today" })))
+  predictor.setPersonal(model.snapshot())
+  const text = "we love İS"
+  expect(predictor.candidates(completionQuery(text, text.length)!, 1)[0]).toMatchObject({ suffix: "İSTANBUL", replace: 2 })
+})
