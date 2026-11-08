@@ -1,19 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Quill</title>
-  <desc id="desc">A teal quill beside custom lettering, with a cursor separating qu from the muted completion ill.</desc>
-  <g fill="#167D8D">
-    <path d="M36 116C26 78 55 33 118 24C117 47 110 67 97 83L75 85L85 95C74 104 62 109 49 110L105 39L36 116Z"/>
-    <path d="M35 116L91 53L44 124C42 127 37 129 32 130L35 116Z"/>
-  </g>
-  <g stroke="#24343B" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M195 76C190 65 181 62 171 62C155 62 146 74 146 91C146 108 155 120 171 120C184 120 195 110 195 94M195 65V141"/>
-    <path d="M222 65V98C222 113 230 120 243 120C257 120 267 110 267 96M267 65V117"/>
-  </g>
-  <path d="M290 52V130" stroke="#167D8D" stroke-width="3"/>
-  <g stroke="#79868D" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M315 76V118"/>
-    <path d="M347 40V105C347 114 351 119 360 119"/>
-    <path d="M386 40V105C386 114 390 119 399 119"/>
-  </g>
-  <circle cx="315" cy="53" r="6" fill="#79868D"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="462" height="128" viewBox="0 0 462 128" role="img" aria-label="quill">
+<title>quill</title>
+<desc>A quill writing at a cursor, followed by dimmed predicted text.</desc>
+<style>
+.tile{fill:#15171e}.edge{fill:none;stroke:#2c303b;stroke-width:2}
+.vane{fill:#e8eaf0}.shaft{fill:none;stroke:#15171e;stroke-width:3.5;stroke-linecap:round}
+.typed{fill:#e8eaf0}.cursor{fill:#ff9e3d}.ghost{fill:#3d4250}
+.word{fill:#1b1f27}
+</style>
+<g transform="translate(0 0)">
+<rect width="128" height="128" rx="30" class="tile"/>
+<rect x="1" y="1" width="126" height="126" rx="29" class="edge"/>
+<path d="M49 89L56 73Q57 31 105 17Q100 63 65 79Z" class="vane"/>
+<path d="M59 74L97 28" class="shaft"/>
+<rect x="24" y="93" width="18" height="8" rx="4" class="typed"/>
+<rect x="47" y="88" width="6" height="18" rx="3" class="cursor"/>
+<rect x="60" y="93" width="44" height="8" rx="4" class="ghost"/>
+</g>
+<path class="word" transform="translate(160 101)" d="M19.4493 -28.4883Q19.4493 -20.2617 22.1914 -15.5898Q24.9336 -10.918 29.7578 -10.918Q34.5821 -10.918 37.375 -15.5898Q40.168 -20.2617 40.168 -28.4883Q40.168 -36.7148 37.375 -41.3867Q34.5821 -46.0586 29.7578 -46.0586Q24.9336 -46.0586 22.1914 -41.3867Q19.4493 -36.7148 19.4493 -28.4883ZM40.168 -8.0234Q37.4258 -3.25 33.795 -0.8887Q30.1641 1.4727 25.5938 1.4727Q15.4883 1.4727 10.0293 -6.2461Q4.5704 -13.9648 4.5704 -28.3867Q4.5704 -42.6055 9.9532 -50.4258Q15.336 -58.2461 25.086 -58.2461Q30.2149 -58.2461 33.9981 -55.7578Q37.7813 -53.2695 40.168 -48.3437V-56.875H54.9961V21.6328H40.168ZM66.7383 -19.8555V-56.875H81.6172V-22.1406Q81.6172 -15.9961 83.3438 -13.3555Q85.0703 -10.7148 89.082 -10.7148Q93.0938 -10.7148 95.3535 -14.2695Q97.6133 -17.8242 97.6133 -24.2226V-56.875H112.4922V0H97.6133V-8.4297Q96.0391 -3.707 92.2559 -1.1172Q88.4727 1.4727 83.1406 1.4727Q75.0156 1.4727 70.877 -3.9102Q66.7383 -9.293 66.7383 -19.8555ZM128.4492 -56.875H157.9023V-11.4258H176.3867V0H124.4883V-11.4258H143.0234V-45.4492H128.4492ZM143.0234 -84.5508H157.9023V-67.1836H143.0234ZM195.4922 -23.7148V-67.5898H180.4101V-79.0156H210.3711V-23.7148Q210.3711 -17.0117 212.4531 -14.2187Q214.5351 -11.4258 219.5117 -11.4258H231.3945V0H215.3476Q204.7343 0 200.1133 -5.4844Q195.4922 -10.9687 195.4922 -23.7148ZM254.1054 -23.7148V-67.5898H239.0234V-79.0156H268.9843V-23.7148Q268.9843 -17.0117 271.0664 -14.2187Q273.1484 -11.4258 278.1249 -11.4258H290.0078V0H273.9609Q263.3476 0 258.7265 -5.4844Q254.1054 -10.9687 254.1054 -23.7148Z"/>
 </svg>
