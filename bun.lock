@@ -5,8 +5,8 @@
     "": {
       "name": "opencode-quill",
       "dependencies": {
-        "@opentui/core": "^0.8.0",
-        "@opentui/solid": "^0.8.0",
+        "@opentui/core": "^0.8.1",
+        "@opentui/solid": "^0.8.1",
         "subtlex-word-frequencies": "2.0.0",
       },
       "devDependencies": {
