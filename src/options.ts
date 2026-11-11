@@ -1,4 +1,4 @@
-export type Options = { enabled: boolean; completeAtLineEnd: boolean; completeShell: boolean; acceptKeys: string[]; dismissKeys: string[]; cycleNextKeys: string[]; cyclePreviousKeys: string[] }
+export type Options = { enabled: boolean; completeAtLineEnd: boolean; completeShell: boolean; minSuggestedWordLength: number; acceptKeys: string[]; dismissKeys: string[]; cycleNextKeys: string[]; cyclePreviousKeys: string[] }
 
 function keys(value: unknown, fallback: string[], name: string): string[] {
   if (value === undefined) return fallback
@@ -12,10 +12,12 @@ export function resolveOptions(input: Readonly<Record<string, unknown>>): Option
   if (input.enabled !== undefined && typeof input.enabled !== "boolean") throw new Error("Quill enabled must be a boolean")
   if (input.completeAtLineEnd !== undefined && typeof input.completeAtLineEnd !== "boolean") throw new Error("Quill completeAtLineEnd must be a boolean")
   if (input.completeShell !== undefined && typeof input.completeShell !== "boolean") throw new Error("Quill completeShell must be a boolean")
+  if (input.minSuggestedWordLength !== undefined && (typeof input.minSuggestedWordLength !== "number" || !Number.isInteger(input.minSuggestedWordLength) || input.minSuggestedWordLength < 0)) throw new Error("Quill minSuggestedWordLength must be a non-negative integer")
   return {
     enabled: input.enabled !== false,
     completeAtLineEnd: input.completeAtLineEnd === true,
     completeShell: input.completeShell !== false,
+    minSuggestedWordLength: input.minSuggestedWordLength ?? 0,
     acceptKeys: keys(input.acceptKeys, ["tab", "right"], "acceptKeys"),
     dismissKeys: keys(input.dismissKeys, ["escape"], "dismissKeys"),
     cycleNextKeys: keys(input.cycleNextKeys, [], "cycleNextKeys"),
