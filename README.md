@@ -179,7 +179,6 @@ To pass custom options:
       "options": {
         "enabled": true,
         "completeAtLineEnd": true,
-        "minSuggestedWordLength": 5,
         "acceptKeys": ["tab", "right"],
         "dismissKeys": ["escape"]
       }
@@ -197,7 +196,7 @@ Restart OpenCode after editing `cli.json`.
 | `enabled` | `boolean` | `true` | Initial default for suggestions and learning; a persisted `/quill` toggle takes precedence. |
 | `completeAtLineEnd` | `boolean` | `false` | Also append completions or next words immediately before a newline within a draft. |
 | `completeShell` | `boolean` | `true` | Initial default for shell-mode suggestions and learning; a persisted `/quill shell` toggle takes precedence. |
-| `minSuggestedWordLength` | `number` | `0` | Minimum number of characters in a suggested word; `0` allows any length. |
+| `minSuggestedWordLength` | `number` | `0` | Minimum number of characters in a suggested word, for both prose and shell suggestions; `0` allows any length. |
 | `acceptKeys` | `string[]` | `["tab", "right"]` | Keys that accept and insert the active word suggestion. |
 | `dismissKeys` | `string[]` | `["escape"]` | Keys that dismiss the visible suggestion without inserting. |
 | `cycleNextKeys` | `string[]` | `[]` | Optional keys for the next confident word suggestion. |
