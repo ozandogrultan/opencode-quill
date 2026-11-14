@@ -33,11 +33,20 @@ test("commands fall through without an eligible suggestion", () => {
 })
 
 test("option parsing preserves host syntax and rejects invalid input", () => {
-  expect(resolveOptions({})).toEqual({ enabled: true, completeAtLineEnd: false, completeShell: true, acceptKeys: ["tab", "right"], dismissKeys: ["escape"], cycleNextKeys: [], cyclePreviousKeys: [] })
+  expect(resolveOptions({})).toEqual({ enabled: true, completeAtLineEnd: false, completeShell: true, minSuggestedWordLength: 0, acceptKeys: ["tab", "right"], dismissKeys: ["escape"], cycleNextKeys: [], cyclePreviousKeys: [] })
   expect(resolveOptions({ completeAtLineEnd: true }).completeAtLineEnd).toBe(true)
   expect(resolveOptions({ acceptKeys: [" ctrl+y ", "ctrl+y"] }).acceptKeys).toEqual(["ctrl+y"])
   for (const input of [{ enabled: "yes" }, { completeAtLineEnd: "yes" }, { completeAtLineEnd: 1 }, { acceptKeys: false }, { acceptKeys: [""] }, { dismissKeys: [1] }, { cycleNextKeys: "tab" }, { cyclePreviousKeys: [null] }]) {
     expect(() => resolveOptions(input)).toThrow()
+  }
+})
+
+test("minimum word length accepts non-negative integers and rejects invalid values", () => {
+  for (const minSuggestedWordLength of [0, 5]) {
+    expect(resolveOptions({ minSuggestedWordLength }).minSuggestedWordLength).toBe(minSuggestedWordLength)
+  }
+  for (const minSuggestedWordLength of [-1, 1.5, NaN, Infinity, "5", null, true]) {
+    expect(() => resolveOptions({ minSuggestedWordLength })).toThrow("Quill minSuggestedWordLength must be a non-negative integer")
   }
 })
 

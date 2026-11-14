@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from "bun:test"
 import frequencies from "subtlex-word-frequencies"
 import { emptySnapshot, PersonalModel, trim, WordPredictor } from "../src/predictor"
-import { completionQuery } from "../src/prose"
+import { completionQuery, proseGrammar } from "../src/prose"
 
 test("trim evicts the oldest entry among equal counts and keeps the row order", () => {
   const map = new Map([["old", 1], ["mid", 1], ["hot", 3], ["new", 1]])
@@ -32,6 +32,64 @@ test("saturated context maps keep learning new phrases", () => {
 function complete(predictor: WordPredictor, text: string) {
   return predictor.candidates(completionQuery(text, text.length)!, 1)[0]
 }
+
+test("minimum word length filters whole words, not their remaining letters", () => {
+  const predictor = new WordPredictor([
+    { word: "text", count: 6 },
+    { word: "tests", count: 4 },
+  ], proseGrammar, 5)
+
+  expect(complete(predictor, "te")).toMatchObject({ word: "tests", suffix: "sts" })
+  expect(predictor.candidates(completionQuery("te", 2)!).map(({ word }) => word)).toEqual(["tests"])
+  expect(complete(predictor, "test")).toMatchObject({ word: "tests", suffix: "s" })
+  expect(complete(predictor, "tex")).toBeUndefined()
+
+  expect(complete(predictor, "text please tex")).toBeUndefined()
+  expect(complete(predictor, "quill please quil")).toMatchObject({ word: "quill", suffix: "l" })
+})
+
+test("hiding a short word does not make an unlikely longer word worth suggesting", () => {
+  const predictor = new WordPredictor([
+    { word: "text", count: 99 },
+    { word: "tests", count: 1 },
+  ], proseGrammar, 5)
+
+  expect(complete(predictor, "te")).toBeUndefined()
+})
+
+test("minimum word length does not force a longer word when the typed word is already correct", () => {
+  const predictor = new WordPredictor([
+    { word: "the", count: 1000 },
+    { word: "there", count: 1 },
+  ], proseGrammar, 5)
+
+  expect(complete(predictor, "the")).toBeUndefined()
+})
+
+test("minimum word length applies to next words and corrections without discarding short context words", () => {
+  const model = new PersonalModel()
+  model.observe([
+    { id: "1", text: "please run tests" }, { id: "2", text: "please run tests" },
+    { id: "3", text: "please write text" }, { id: "4", text: "please write text" },
+  ])
+  const predictor = new WordPredictor([{ word: "run", count: 1 }, { word: "tests", count: 1 }, { word: "text", count: 1 }], proseGrammar, 5)
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "please run ")).toMatchObject({ word: "tests" })
+  expect(complete(predictor, "please rnu ")).toMatchObject({ word: "tests" })
+  expect(complete(predictor, "please write ")).toBeUndefined()
+  expect(complete(predictor, "please run tsets")).toMatchObject({ word: "tests", replace: 5 })
+  expect(complete(predictor, "please write txet")).toBeUndefined()
+})
+
+test("minimum word length counts Unicode code points rather than UTF-16 code units", () => {
+  for (const length of [4, 5]) {
+    const word = "𐐨".repeat(length)
+    const predictor = new WordPredictor([{ word, count: 1 }], proseGrammar, 5)
+    const prediction = complete(predictor, "𐐨𐐨")
+    if (length < 5) expect(prediction).toBeUndefined()
+    else expect(prediction).toMatchObject({ word, suffix: "𐐨".repeat(3) })
+  }
+})
 
 test("ranked candidates are bounded, confident, and keep the original best completion", () => {
   const predictor = new WordPredictor([{ word: "complete", count: 6 }, { word: "compare", count: 4 }, { word: "company", count: 0.1 }])

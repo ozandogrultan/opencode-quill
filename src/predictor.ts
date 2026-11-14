@@ -216,7 +216,7 @@ export class WordPredictor {
   private followers = new Map<string, string[]>()
   private forms = new Map<string, string>()
 
-  constructor(prior: readonly Frequency[], readonly grammar: Grammar = proseGrammar) {
+  constructor(prior: readonly Frequency[], readonly grammar: Grammar = proseGrammar, private readonly minSuggestedWordLength = 0) {
     for (const { word, count } of prior) {
       const key = grammar.normalize(word)
       if (!grammar.isWord(key) || !Number.isFinite(count) || count <= 0) continue
@@ -365,6 +365,7 @@ export class WordPredictor {
         const base = this.score(word, context, weight < 1) + (query.next ? 0 : 0.003 * Math.min(local.get(word) ?? 0, 3))
         const score = base * weight
         sum += score
+        if (this.minSuggestedWordLength && word !== prefix && [...word].length < this.minSuggestedWordLength) continue
         ranked.push({ word, score, weight })
         ranked.sort((a, b) => b.score - a.score)
         if (ranked.length > maximum) ranked.pop()

@@ -24,8 +24,8 @@ export default Plugin.define({
     const [shellLearning, setShellLearning] = context.storage.store("shell", {
       initial: { snapshot: emptySnapshot() },
     })
-    const predictor = new WordPredictor(frequencies)
-    const shellPredictor = new WordPredictor([], shellGrammar)
+    const predictor = new WordPredictor(frequencies, proseGrammar, options.minSuggestedWordLength)
+    const shellPredictor = new WordPredictor([], shellGrammar, options.minSuggestedWordLength)
     const composers = new Map<string, { marker: BoxRenderable; mode: () => "normal" | "shell" }>()
     const seeded = new Set<string>()
     const inFlight = new Map<string, { pending: boolean; announce: boolean }>()

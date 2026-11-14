@@ -69,6 +69,15 @@ test("completes learned commands, subcommands and flags with their original case
   expect(predictor.candidates(query("make")!, 1)[0]).toBeUndefined()
 })
 
+test("minimum word length also filters shell completions and next words", () => {
+  const { model } = trained(["git log", "git status"])
+  const predictor = new WordPredictor([], shellGrammar, 5)
+  predictor.setPersonal(model.snapshot())
+  expect(predictor.candidates(query("git lo")!)).toEqual([])
+  expect(predictor.candidates(query("git ")!).map(({ word }) => word)).toEqual(["status"])
+  expect(predictor.candidates(query("git statu")!, 1)[0]).toMatchObject({ word: "status", suffix: "s" })
+})
+
 test("shell completion never uppercases, capitalizes or corrects typos", () => {
   const { predictor } = trained(["git status --short", "i install"])
   expect(predictor.candidates(query("i ")!, 1)[0]).toMatchObject({ suffix: "install" })
