@@ -56,7 +56,7 @@
     "subtlex-word-frequencies": "2.0.0"
   },
   "peerDependencies": {
-    "@opencode/plugin": "*",
+    "@opencode/plugin": ">=2.4.0",
     "solid-js": "*"
   },
   "devDependencies": {
