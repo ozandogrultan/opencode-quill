@@ -676,3 +676,81 @@ test("shouted length-changing casing replaces the whole word in capitals", () =>
   const text = "we love İS"
   expect(predictor.candidates(completionQuery(text, text.length)!, 1)[0]).toMatchObject({ suffix: "İSTANBUL", replace: 2 })
 })
+
+test("offers a strong longer word when the typed word is already complete", () => {
+  const predictor = new WordPredictor([])
+  const learn = (pairs: [string, number][]) => {
+    const model = new PersonalModel()
+    model.observe(pairs.flatMap(([text, count]) => Array(count).fill(text)).map((text, index) => ({ id: String(index), text })))
+    predictor.setPersonal(model.snapshot())
+  }
+  learn([["run local tests", 6], ["run locally now", 4]])
+  expect(complete(predictor, "run local")).toMatchObject({ word: "locally", suffix: "ly" })
+  learn([["run local tests", 20], ["run locally now", 2]])
+  expect(complete(predictor, "run local")).toBeUndefined()
+})
+
+test("longer words that outrank the typed word still need confidence", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["run con", 2], ["run config", 3], ["run context", 3], ["run console", 3]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "run con")).toBeUndefined()
+})
+
+test("single-letter prefixes need higher confidence than longer ones", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["fix the bug", 4], ["fix them all", 3], ["fix tests now", 3], ["fix this one", 2]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "fix t")).toBeUndefined()
+  expect(complete(predictor, "fix th")).toMatchObject({ word: "the" })
+})
+
+test("completes contractions after the apostrophe", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe(Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: "i'd like that" })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "i'")?.word).toBe("i'd")
+})
+
+test("does not typo-correct a trailing apostrophe", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe(Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: "ask the user's team" })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "ask the users'")).toBeUndefined()
+})
+
+test("single-letter words do not use the complete-word offer", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["so i think", 10], ["so it works", 5]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "so i")).toBeUndefined()
+})
+
+test("curly apostrophes complete contractions", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe(Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: "i'd like that" })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "i’")?.word).toBe("i'd")
+})
+
+test("results stay within the limit when the typed word takes a ranking slot", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["run con", 5], ["run config", 4], ["run context", 4]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  const query = completionQuery("run con", 7)!
+  expect(predictor.candidates(query, 1)).toHaveLength(1)
+  expect(predictor.candidates(query, 2).map(({ word }) => word).sort()).toEqual(["config", "context"])
+})
+
+test("an apostrophe ends a word prefix before hyphens and slashes", () => {
+  expect(completionQuery("don'", 4)?.prefix).toBe("don'")
+  expect(completionQuery("don'-", 5)).toBeUndefined()
+  expect(completionQuery("don'/x", 6)).toBeUndefined()
+})

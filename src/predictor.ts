@@ -14,6 +14,10 @@ export type Prompt = { id: string; text: string }
 export type Prediction = { suffix: string; word: string; confidence: number; replace?: number }
 
 const DISCOUNT = 0.5
+const CONFIDENCE = 0.3
+const SHORT_CONFIDENCE = 0.4
+const EXACT_RATIO = 0.4
+const FRAGMENT_RATIO = 3
 const MIN_TYPO_SCORE = 0.000001
 const PRIOR_LIMIT = 20_000
 const WORD_LIMIT = 8000
@@ -240,7 +244,7 @@ export class WordPredictor {
       const word = learned[index]
       if (this.prior.has(word)) continue
       for (let next = index + 1; next < learned.length && learned[next].startsWith(word); next++) {
-        if (!"/-.".includes(learned[next][word.length]) && counts.get(learned[next])! >= counts.get(word)!) {
+        if (!"/-.".includes(learned[next][word.length]) && counts.get(learned[next])! >= (this.grammar.prose ? FRAGMENT_RATIO : 1) * counts.get(word)!) {
           fragments.add(word)
           break
         }
@@ -368,12 +372,23 @@ export class WordPredictor {
         if (this.minSuggestedWordLength && word !== prefix && [...word].length < this.minSuggestedWordLength) continue
         ranked.push({ word, score, weight })
         ranked.sort((a, b) => b.score - a.score)
-        if (ranked.length > maximum) ranked.pop()
+        if (ranked.length > maximum + (this.grammar.prose && candidates.has(prefix) && !query.next ? 1 : 0)) ranked.pop()
       }
       const predictions: Prediction[] = []
+      const exact = query.next ? 0 : ranked.find(({ word }) => word === prefix)?.score ?? 0
+      const short = [...prefix].length < 2
+      const threshold = this.grammar.prose && short ? SHORT_CONFIDENCE : CONFIDENCE
+      const exactConfident = this.grammar.prose && !short && exact >= threshold * (sum || 1)
       for (const { word: best, score: bestScore, weight: bestWeight } of ranked) {
+        if (best === prefix && !query.next) {
+          if (!this.grammar.prose && !predictions.length) return []
+          continue
+        }
         const confidence = bestWeight < 1 ? typoConfidence(bestScore, sum) : query.next ? bestScore : bestScore / (sum || 1)
-        if (!bestScore || best === prefix || confidence === undefined || (bestWeight === 1 && confidence < 0.3)) {
+        const gate = query.next
+          ? bestScore >= CONFIDENCE
+          : confidence! >= threshold || (exactConfident && bestScore >= EXACT_RATIO * exact)
+        if (!bestScore || confidence === undefined || (bestWeight === 1 && !gate)) {
           if (!predictions.length) return []
           continue
         }
@@ -389,10 +404,10 @@ export class WordPredictor {
           predictions.push({ suffix: shouting ? suffix.toUpperCase() : suffix, word: best, confidence })
         }
       }
-      return predictions
+      return predictions.slice(0, maximum)
     }
     const completion = suggest()
-    if (completion.length || query.next || prefix.length < 3 || slash || candidates.has(prefix) || !this.grammar.prose) return completion
+    if (completion.length || query.next || prefix.length < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return completion
     for (const word of this.nearbyWords(prefix)) {
       if (candidates.has(word)) continue
       const weight = typoWeight(prefix, word)

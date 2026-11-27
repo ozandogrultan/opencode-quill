@@ -29,7 +29,7 @@ README.md is the user-facing contract — read it before changing behavior.
   masked against code, paths, URLs, shell commands, and large pastes.
 - **Model Growth:** Counts words, bigrams (`u\0w`), trigrams (`u\0v\0w`), and
   mid-sentence casing forms. A word joins the vocabulary once it has been seen
-  more than once, unless it is a prefix of a learned word used at least as often.
+  more than once, unless it is a prefix of a learned word used at least 3x as often.
   The model is pruned on persistence and halved past a total-count budget; limits
   live as constants in `src/predictor.ts`.
 - **Shell Model:** A second `PersonalModel`/`WordPredictor` pair built on `shellGrammar`
