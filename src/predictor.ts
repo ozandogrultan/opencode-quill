@@ -409,7 +409,7 @@ export class WordPredictor {
       return predictions.slice(0, maximum)
     }
     const completion = suggest()
-    if (completion.length || query.next || prefix.length < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return completion
+    if (completion.length || query.next || prefixLength < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return completion
     for (const word of this.nearbyWords(prefix)) {
       if (candidates.has(word)) continue
       const weight = typoWeight(prefix, word)
