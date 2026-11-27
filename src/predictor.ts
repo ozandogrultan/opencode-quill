@@ -190,8 +190,8 @@ function typoWeight(prefix: string, word: string, wholeWord = false, protectEndi
   return 0
 }
 
-function typoConfidence(score: number, total: number): number | undefined {
-  if (score < MIN_TYPO_SCORE || score / (total || 1) < 0.45) return
+function typoConfidence(score: number, total: number, summoned = false): number | undefined {
+  if (score < MIN_TYPO_SCORE || (!summoned && score / (total || 1) < 0.45)) return
   return score
 }
 
@@ -349,6 +349,7 @@ export class WordPredictor {
     if (query.next && evidence < 2) return []
     if (!query.next && prefixLength < 2 && evidence < 2) return []
     const typedPrevious = rawContext.at(-1)
+    let contraction: Prediction | undefined
     if (allowContractionReplacement && this.grammar.prose && !query.next && prefixLength >= 3 && typedPrevious && /^[a-z]+$/.test(prefix)) {
       const ending = /n(t)$|(d|ll|re|ve)$/.exec(prefix)
       if (ending && prefixLength + 1 >= this.minSuggestedWordLength) {
@@ -357,10 +358,11 @@ export class WordPredictor {
         const count = this.personal.bigrams.get(`${typedPrevious}\0${word}`) ?? 0
         const total = this.bigramTotals.get(typedPrevious)?.total ?? 0
         if (count >= 2 && count > total / 2) {
-          return [{ word, suffix: applyCase(query.prefix, this.forms.get(word) ?? word), confidence: count / total, replace: query.prefix.length }]
+          contraction = { word, suffix: applyCase(query.prefix, this.forms.get(word) ?? word), confidence: count / total, replace: query.prefix.length }
         }
       }
     }
+    const lead = (list: Prediction[]) => contraction ? [contraction, ...list.filter(({ word }) => word !== contraction.word)].slice(0, maximum) : list
     const slash = prefix.includes("/")
     const followed = (word: string) => (previous ? this.personal.bigrams.get(`${previous}\0${word}`) ?? 0 : 0) >= 2 ||
       (pair ? this.personal.trigrams.get(`${pair}\0${word}`) ?? 0 : 0) >= 2
@@ -403,7 +405,7 @@ export class WordPredictor {
           if (!this.grammar.prose && !predictions.length) return []
           continue
         }
-        const confidence = bestWeight < 1 ? typoConfidence(bestScore, sum) : query.next ? bestScore : bestScore / (sum || 1)
+        const confidence = bestWeight < 1 ? typoConfidence(bestScore, sum, summoned) : query.next ? bestScore : bestScore / (sum || 1)
         const gate = query.next
           ? bestScore >= CONFIDENCE
           : confidence! >= threshold || (exactConfident && bestScore >= EXACT_RATIO * exact)
@@ -426,7 +428,7 @@ export class WordPredictor {
       return predictions.slice(0, maximum)
     }
     const completion = suggest()
-    if (completion.length || query.next || prefixLength < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return completion
+    if (completion.length || query.next || prefixLength < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return lead(completion)
     const protectEnding = this.known.has(prefix.slice(0, -1))
     for (const word of this.nearbyWords(prefix)) {
       if (candidates.has(word)) continue
@@ -438,6 +440,6 @@ export class WordPredictor {
       const weight = typoWeight(prefix, word, false, protectEnding)
       if (weight > 0) candidates.set(word, weight)
     }
-    return suggest(true)
+    return lead(suggest(true))
   }
 }
