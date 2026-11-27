@@ -13,13 +13,11 @@ afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup() 
 const pickerColors = {
   text: RGBA.fromHex("#ffffff"),
   muted: RGBA.fromHex("#aaaaaa"),
-  background: RGBA.fromHex("#222222"),
-  selectedText: RGBA.fromHex("#000000"),
-  selectedBackground: RGBA.fromHex("#eeeeee"),
+  background: RGBA.fromValues(0.13, 0.13, 0.13, 0.3),
 }
 
 async function setup(text = "please comp", width = 60, completeAtLineEnd = false, cycle = () => false, top = 1, summon?: string) {
-  const testing = await createTestRenderer({ width, height: 8 })
+  const testing = await createTestRenderer({ width, height: Math.max(8, top + 2) })
   cleanups.push(() => testing.renderer.destroy())
   const parent = new BoxRenderable(testing.renderer, { id: "composer", width, height: top + 3, paddingLeft: 2, paddingTop: top })
   const editor = new TextareaRenderable(testing.renderer, { id: "input", width: "100%", height: 2, wrapMode: "word" })
@@ -263,7 +261,7 @@ test.each(["draft end", "line end", "attachment"])("preserves a legal append whe
 })
 
 test("summon shows low-confidence alternatives for the current draft only", async () => {
-  const fixture = await setup("please lo", 60, false, () => false, 6, "Ctrl+Y")
+  const fixture = await setup("please lo", 60, false, () => false, 7, "Ctrl+Y")
   const model = new PersonalModel()
   model.observe(["local", "locally", "location", "locus", "lock", "locker"].flatMap((word) =>
     [1, 2].map((number) => ({ id: `${word}:${number}`, text: word }))))
@@ -300,31 +298,34 @@ test("a single explicitly summoned next word stays inline", async () => {
   expect(fixture.ghost.summon()).toBe(false)
 })
 
-test("summon uses the reported shortcut and draws the selected terms above the typed prefix", async () => {
-  const fixture = await setup("漢字 CoMp", 60, false, () => false, 4, "Ctrl+Y")
+test("shows a quiet count and draws an opaque, outlined picker above the typed prefix", async () => {
+  const fixture = await setup("漢字 CoMp", 60, false, () => false, 5, "Ctrl+Y")
   const candidates = spyOn(fixture.predictor, "candidates").mockReturnValue([
     { word: "complete", suffix: "lete", confidence: 0.6 },
     { word: "compare", suffix: "Compare", confidence: 0.4, replace: 4 },
   ])
   fixture.ghost.invalidate()
   await fixture.renderOnce()
-  expect(fixture.captureCharFrame()).toContain("漢字 CoMplete  Ctrl+Y for 2 choices")
+  expect(fixture.captureCharFrame()).toContain("漢字 CoMplete  1/2")
+  expect(fixture.captureCharFrame()).not.toContain("Ctrl+Y")
   expect(fixture.ghost.pickerVisible()).toBe(false)
   expect(fixture.ghost.summon()).toBe(true)
   expect(fixture.ghost.pickerVisible()).toBe(false)
   await fixture.renderOnce()
   const rows = fixture.captureCharFrame().split("\n")
-  expect(rows.slice(1, 4).map((row) => row.trimEnd())).toEqual([
-    "     › CoMplete",
-    "       Compare",
-    "       ↑/↓ move · Tab accept · Esc close",
-  ])
-  expect(rows[4]).toContain("漢字 CoMplete")
+  expect(rows[0]).toMatch(/┌─+┐/)
+  expect(rows[1]).toMatch(/│ › CoMplete +│/)
+  expect(rows[2]).toMatch(/│   Compare +│/)
+  expect(rows[3]).toContain("↑/↓ move · Tab accept · Esc close")
+  expect(rows[4]).toMatch(/└─+┘/)
+  expect(rows[5]).toContain("漢字 CoMplete")
   const highlighted = fixture.captureSpans().lines[1].spans.find((span) => span.text.includes("CoMplete"))
   const unselected = fixture.captureSpans().lines[2].spans.find((span) => span.text.includes("Compare"))
-  expect(highlighted?.fg).toEqual(pickerColors.selectedText)
-  expect(highlighted?.bg).toEqual(pickerColors.selectedBackground)
-  expect(unselected?.bg).toEqual(pickerColors.background)
+  const { r, g, b } = pickerColors.background
+  const opaqueBackground = RGBA.fromValues(r, g, b, 1)
+  expect(highlighted?.fg).toEqual(opaqueBackground)
+  expect(highlighted?.bg).toEqual(pickerColors.text)
+  expect(unselected?.bg).toEqual(opaqueBackground)
   expect(fixture.ghost.pickerVisible()).toBe(true)
   expect(fixture.ghost.cycle(1)).toBe(true)
   expect(fixture.ghost.cycle(1)).toBe(true)
@@ -352,7 +353,8 @@ test("picker Escape closes the list without editing or discarding the inline sug
   expect(fixture.ghost.pickerVisible()).toBe(false)
   await fixture.renderOnce()
   expect(fixture.captureCharFrame()).not.toContain("›")
-  expect(fixture.captureCharFrame()).toContain("Ctrl+Y for 2 choices")
+  expect(fixture.captureCharFrame()).toContain("2/2")
+  expect(fixture.captureCharFrame()).not.toContain("Ctrl+Y")
   expect(fixture.ghost.visible()).toBe(true)
   expect(fixture.editor.plainText).toBe("please comp")
   expect(fixture.ghost.summon()).toBe(true)
@@ -398,13 +400,13 @@ test("summon alone cycles inline after the first attempt cannot draw a picker", 
   expect(fixture.ghost.summon()).toBe(true)
   expect(fixture.ghost.summon()).toBe(true)
   await fixture.renderOnce()
-  expect(fixture.captureCharFrame()).toContain("please complete  Ctrl+Y cycles 2 choices")
+  expect(fixture.captureCharFrame()).toContain("please complete  1/2")
   expect(fixture.ghost.pickerVisible()).toBe(false)
   expect((down.enabled as () => boolean)()).toBe(false)
   expect(down.run()).toBe(false)
   expect(fixture.ghost.summon()).toBe(true)
   await fixture.renderOnce()
-  expect(fixture.captureCharFrame()).toContain("please compare  Ctrl+Y cycles 2 choices")
+  expect(fixture.captureCharFrame()).toContain("please compare  2/2")
   expect(fixture.ghost.pickerVisible()).toBe(false)
   expect(fixture.ghost.summon()).toBe(true)
   await fixture.renderOnce()

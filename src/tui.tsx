@@ -83,8 +83,6 @@ export default Plugin.define({
             text: text.base,
             muted: text.muted,
             background: background.raised.base,
-            selectedText: text.selection,
-            selectedBackground: background.selection,
           },
         }
       })
