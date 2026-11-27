@@ -306,8 +306,13 @@ Quill learns from your own submitted prompts, never from assistant output:
   Corrections require at least three typed letters. Short words are eligible
   only for whole-word letter swaps that preserve the first letter; other edits
   and mistyped longer prefixes require at least five letters, except for
-  apostrophe contractions, including missing apostrophes. Deletions repair only
-  doubled letters, not arbitrary extra characters or word endings.
+  apostrophe contractions, including missing apostrophes. A missing apostrophe
+  can be restored even when the typed word exists if the contraction has
+  repeated evidence and accounts for more than half of the learned continuations
+  after the previous word. Deletions repair only doubled letters. A final letter
+  after an otherwise known word does not trigger a longer typo completion
+  by substitution alone.
+  Equally scored spelling repairs are withheld unless explicitly summoned.
   Unknown tokens such as `json`, `yaml`, `bool`, `opts`,
   and `enum` are left unchanged, and uncertain typos such as `fucn` can produce
   no suggestion. Context repair uses the same edit guards and confidence checks

@@ -432,7 +432,7 @@ test("allows supported partial edits without requiring a monopoly on candidates"
     const predictor = new WordPredictor([{ word, count: 1 }])
     expect(complete(predictor, prefix)).toMatchObject({ word, suffix: word, replace: prefix.length })
   }
-  const predictor = new WordPredictor([{ word: "pleased", count: 1 }, { word: "pleases", count: 1 }])
+  const predictor = new WordPredictor([{ word: "pleased", count: 11 }, { word: "pleases", count: 10 }])
   expect(complete(predictor, "pleae")).toMatchObject({ word: "pleased", replace: 5 })
   const weak = new WordPredictor([{ word: "outside", count: 1 }, { word: "unrelated", count: 1_000_000 }])
   expect(complete(weak, "outsx")).toBeUndefined()
@@ -780,4 +780,38 @@ test("a two-letter Unicode prefix cannot fall back to typo replacement", () => {
   const query = completionQuery(prefix, prefix.length)!
   expect(predictor.candidates(query)).toEqual([])
   expect(predictor.candidates(query, 5, true)[0]).toMatchObject({ word: "𐐨ab", suffix: "b" })
+})
+
+test("learned context can restore a missing contraction apostrophe without replacing a valid word elsewhere", () => {
+  const predictor = new WordPredictor(frequencies)
+  const model = new PersonalModel()
+  model.observe([
+    { id: "1", text: "please can't" },
+    { id: "2", text: "please can't" },
+    { id: "3", text: "please can't" },
+    { id: "4", text: "please cant" },
+    { id: "5", text: "this wont" },
+    { id: "6", text: "this won't" },
+    { id: "7", text: "this won't" },
+    { id: "8", text: "this wont" },
+  ])
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "please cant")).toMatchObject({ word: "can't", suffix: "can't", replace: 4 })
+  expect(complete(predictor, "please CANT")).toMatchObject({ word: "can't", suffix: "CAN'T", replace: 4 })
+  expect(complete(predictor, "angle cant")?.replace).toBeUndefined()
+  expect(complete(predictor, "this wont")?.replace).toBeUndefined()
+})
+
+test("a final wrong letter after a known word does not trigger a longer partial typo repair", () => {
+  const predictor = new WordPredictor(frequencies)
+  expect(complete(predictor, "please completex")).toBeUndefined()
+  expect(complete(predictor, "please complet")).toMatchObject({ word: "completely", suffix: "ely" })
+})
+
+test("equal spelling repairs require explicit summon even when requesting one candidate", () => {
+  const predictor = new WordPredictor([{ word: "caper", count: 10 }, { word: "cater", count: 10 }])
+  const query = completionQuery("cazer", 5)!
+  expect(predictor.candidates(query, 1)).toEqual([])
+  expect(predictor.candidates(query)).toEqual([])
+  expect(predictor.candidates(query, 5, true).map(({ word }) => word)).toEqual(["caper", "cater"])
 })

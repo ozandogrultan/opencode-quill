@@ -225,6 +225,31 @@ test("cycles confident alternatives without editing, wraps, and accepts with nat
   expect(fixture.editor.plainText).toBe("please compare")
 })
 
+test.each(["draft end", "line end", "attachment"])("preserves a legal append when contraction replacement is unavailable: %s", async (mode) => {
+  const line = "please cant"
+  const text = mode === "line end" ? `${line}\nlater` : mode === "attachment" ? `[Image 1]\n${line}` : line
+  const fixture = await setup(text, 60, true)
+  if (mode === "line end") fixture.editor.cursorOffset = line.length
+  if (mode === "attachment") fixture.editor.extmarks.create({ start: 0, end: 9, virtual: true })
+  const model = new PersonalModel()
+  model.observe(["please can't", "please can't", "try cantaloupe", "try cantaloupe"].map((text, id) => ({ text, id: String(id) })))
+  fixture.predictor.setPersonal(model.snapshot())
+  await fixture.renderOnce()
+  if (mode === "draft end") {
+    expect(fixture.captureCharFrame()).toContain("please cant → can't")
+    expect(fixture.ghost.accept()).toBe(true)
+    expect(fixture.editor.plainText).toBe("please can't")
+    return
+  }
+  expect(fixture.captureCharFrame()).toContain("please cantaloupe")
+  expect(fixture.ghost.dismiss()).toBe(true)
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please cantaloupe")
+  expect(fixture.ghost.accept()).toBe(true)
+  expect(fixture.editor.plainText).toBe(text.replace(line, "please cantaloupe"))
+})
+
 test("summon shows low-confidence alternatives for the current draft only", async () => {
   const fixture = await setup("please lo", 60, false, () => true)
   const model = new PersonalModel()
