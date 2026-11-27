@@ -5,6 +5,7 @@ function keys(value: unknown, fallback: string[], name: string): string[] {
   if (!Array.isArray(value) || value.some((key) => typeof key !== "string" || !key.trim())) {
     throw new Error(`Quill ${name} must be an array of non-empty keybindings`)
   }
+  if (value.some((key: string) => key.includes(","))) throw new Error(`Quill ${name} must not contain commas`)
   return [...new Set(value.map((key: string) => key.trim()))]
 }
 
@@ -13,16 +14,27 @@ export function resolveOptions(input: Readonly<Record<string, unknown>>): Option
   if (input.completeAtLineEnd !== undefined && typeof input.completeAtLineEnd !== "boolean") throw new Error("Quill completeAtLineEnd must be a boolean")
   if (input.completeShell !== undefined && typeof input.completeShell !== "boolean") throw new Error("Quill completeShell must be a boolean")
   if (input.minSuggestedWordLength !== undefined && (typeof input.minSuggestedWordLength !== "number" || !Number.isInteger(input.minSuggestedWordLength) || input.minSuggestedWordLength < 0)) throw new Error("Quill minSuggestedWordLength must be a non-negative integer")
-  return {
-    enabled: input.enabled !== false,
-    completeAtLineEnd: input.completeAtLineEnd === true,
-    completeShell: input.completeShell !== false,
-    minSuggestedWordLength: input.minSuggestedWordLength ?? 0,
+  const bindings = {
     acceptKeys: keys(input.acceptKeys, ["tab", "right"], "acceptKeys"),
     dismissKeys: keys(input.dismissKeys, ["escape"], "dismissKeys"),
     cycleNextKeys: keys(input.cycleNextKeys, [], "cycleNextKeys"),
     cyclePreviousKeys: keys(input.cyclePreviousKeys, [], "cyclePreviousKeys"),
     summonKeys: keys(input.summonKeys, [], "summonKeys"),
+  }
+  const owners = new Map<string, string>()
+  for (const [name, list] of Object.entries(bindings)) {
+    for (const key of list) {
+      const owner = owners.get(key.toLowerCase())
+      if (owner) throw new Error(`Quill ${key} is bound in both ${owner} and ${name}`)
+      owners.set(key.toLowerCase(), name)
+    }
+  }
+  return {
+    enabled: input.enabled !== false,
+    completeAtLineEnd: input.completeAtLineEnd === true,
+    completeShell: input.completeShell !== false,
+    minSuggestedWordLength: input.minSuggestedWordLength ?? 0,
+    ...bindings,
   }
 }
 

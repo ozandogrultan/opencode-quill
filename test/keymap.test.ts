@@ -41,6 +41,15 @@ test("option parsing preserves host syntax and rejects invalid input", () => {
   }
 })
 
+test("keys must not overlap across actions or contain commas", () => {
+  expect(() => resolveOptions({ acceptKeys: ["tab"], summonKeys: ["Tab"] })).toThrow("Quill Tab is bound in both acceptKeys and summonKeys")
+  expect(() => resolveOptions({ cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+n"] })).toThrow("bound in both cycleNextKeys and cyclePreviousKeys")
+  expect(() => resolveOptions({ dismissKeys: ["tab"] })).toThrow("bound in both acceptKeys and dismissKeys")
+  expect(() => resolveOptions({ acceptKeys: ["ctrl+,"] })).toThrow("acceptKeys must not contain commas")
+  expect(() => resolveOptions({ summonKeys: [","] })).toThrow("summonKeys must not contain commas")
+  expect(resolveOptions({ acceptKeys: ["tab"], dismissKeys: ["escape"], summonKeys: ["ctrl+y"], cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+p"] }).summonKeys).toEqual(["ctrl+y"])
+})
+
 test("minimum word length accepts non-negative integers and rejects invalid values", () => {
   for (const minSuggestedWordLength of [0, 5]) {
     expect(resolveOptions({ minSuggestedWordLength }).minSuggestedWordLength).toBe(minSuggestedWordLength)
