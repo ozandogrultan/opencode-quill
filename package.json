@@ -48,7 +48,8 @@
     "test:changelog": "bash tests/changelog.sh",
     "typecheck": "tsc --noEmit",
     "lint:sh": "for script in install.sh tests/*.sh scripts/*.sh; do bash -n \"$script\" || exit; done",
-    "prepublishOnly": "bun run test && bun run typecheck"
+    "prepublishOnly": "bun run test && bun run typecheck",
+    "eval": "bun scripts/eval.ts"
   },
   "dependencies": {
     "@opentui/core": "^0.9.7",
