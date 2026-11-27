@@ -90,7 +90,9 @@ A correction looks like this, with only ` → complete` dimmed:
   or all-uppercase casing (`Cmplete` → `Complete`, `CMPLETE` → `COMPLETE`).
   First-person contractions use a capital `I` in corrections and next-word
   suggestions (`I'm`, `I'll`, `I've`, `I'd`). Lowercase contraction prefixes
-  are replaced on acceptance too (`i'v` → `I've`).
+  are replaced on acceptance too (`i'v` → `I've`). Typing the apostrophe
+  continues the word (`i'` offers `I'd`), and a word ending in an apostrophe
+  is never typo-corrected (`users'` stays as typed).
 - **Learned casing is kept.** A word you usually capitalize mid-sentence is
   suggested that way: `oz` shows ` → Ozan` and replaces the word, while `Oz`
   completes with `an`.
@@ -286,9 +288,11 @@ Quill learns from your own submitted prompts, never from assistant output:
 - **Current draft:** words already in the draft get a small boost.
 - **Confidence gating:** a suggestion is shown only when it clears a
   confidence threshold, which is stricter for next-word predictions than for
-  prefix completions and for single-letter prefixes. If the typed prefix is
-  already a confident word, a longer word is also offered when it scores at
-  least 40% as high in the current context (typing `local` offers `locally`).
+  prefix completions and, in prose, for single-letter prefixes. If a typed
+  prose prefix of two or more letters is already a confident word, a longer
+  word is also offered when it scores at least 40% as high in the current
+  context (typing `local` offers `locally`). Shell mode shows nothing when
+  the typed command is already the most likely word.
 - **Typo fallback:** when prefix completion is not confident enough, nearby
   words are ranked with an edit penalty and a stricter confidence threshold.
   Correction confidence is the edit-penalized model score. Suggestions must

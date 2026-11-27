@@ -722,3 +722,35 @@ test("does not typo-correct a trailing apostrophe", () => {
   predictor.setPersonal(model.snapshot())
   expect(complete(predictor, "ask the users'")).toBeUndefined()
 })
+
+test("single-letter words do not use the complete-word offer", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["so i think", 10], ["so it works", 5]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "so i")).toBeUndefined()
+})
+
+test("curly apostrophes complete contractions", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe(Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: "i'd like that" })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "i’")?.word).toBe("i'd")
+})
+
+test("results stay within the limit when the typed word takes a ranking slot", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["run con", 5], ["run config", 4], ["run context", 4]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  const query = completionQuery("run con", 7)!
+  expect(predictor.candidates(query, 1)).toHaveLength(1)
+  expect(predictor.candidates(query, 2).map(({ word }) => word).sort()).toEqual(["config", "context"])
+})
+
+test("an apostrophe ends a word prefix before hyphens and slashes", () => {
+  expect(completionQuery("don'", 4)?.prefix).toBe("don'")
+  expect(completionQuery("don'-", 5)).toBeUndefined()
+  expect(completionQuery("don'/x", 6)).toBeUndefined()
+})

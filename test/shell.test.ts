@@ -150,3 +150,11 @@ test("switching mode invalidates a visible suggestion", async () => {
   await fixture.renderOnce()
   expect(fixture.captureCharFrame()).toContain("git stable")
 })
+
+test("shell completion stays silent when the typed command is already the top match", () => {
+  const model = new PersonalModel(undefined, shellGrammar)
+  model.observe([["ls", 6], ["lsof", 4]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  const predictor = new WordPredictor([], shellGrammar)
+  predictor.setPersonal(model.snapshot())
+  expect(predictor.candidates(query("ls")!, 1)).toEqual([])
+})
