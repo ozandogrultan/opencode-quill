@@ -9,11 +9,11 @@ import { PersonalModel, type Snapshot } from "../src/predictor"
 import plugin from "../src/tui"
 
 test("mounted footer slots switch route ghosts, dispose on unmount, and release stale key capture", async () => {
-  const testing = await createTestRenderer({ width: 60, height: 10 })
+  const testing = await createTestRenderer({ width: 60, height: 14 })
   const [route, setRoute] = createSignal("home")
   const [mounted, setMounted] = createSignal(true)
   const model = new PersonalModel()
-  model.observe(Array.from({ length: 20 }, (_, index) => ({ id: `fixture:${index}`, text: "please complete" })))
+  model.observe(Array.from({ length: 20 }, (_, index) => ({ id: `fixture:${index}`, text: index < 12 ? "please complete" : "please compare" })))
   const [learning, setLearning] = createStore({ snapshot: model.snapshot() })
   const [settings] = createStore({ enabled: true })
   const layers: (() => KeymapLayer)[] = []
@@ -21,9 +21,12 @@ test("mounted footer slots switch route ghosts, dispose on unmount, and release 
   let home!: TextareaRenderable
   let session!: TextareaRenderable
   const removed = spyOn(testing.renderer, "removePostProcessFn")
+  const light = RGBA.fromHex("#dddddd")
+  const dark = RGBA.fromHex("#222222")
+  const shortcuts: Record<string, string[]> = { "quill.summon": ["⌃Y"], "quill.accept": ["Tab"], "quill.dismiss": ["Esc"] }
   const context = {
     options: {},
-    theme: { text: { muted: RGBA.fromHex("#888888") } },
+    theme: { text: { base: light, muted: RGBA.fromHex("#888888"), selection: dark }, background: { raised: { base: dark }, selection: light } },
     storage: { store: (key: string) => key === "settings" ? [settings, async () => {}] : [learning, async (mutate: (draft: { snapshot: Snapshot }) => void) => { setLearning(produce(mutate)) }] },
     data: { session: { list: () => [], message: { sync: async () => {}, list: () => [] } }, on: () => () => {} },
     ui: {
@@ -31,18 +34,21 @@ test("mounted footer slots switch route ghosts, dispose on unmount, and release 
       toast: { show: () => {} },
       slot: (registration: { render: typeof footer }) => { footer = registration.render; return () => {} },
     },
-    keymap: { mode: { current: () => "base" }, layer: (factory: () => KeymapLayer) => { layers.push(factory) } },
+    keymap: { mode: { current: () => "base" }, shortcuts: (id: string) => shortcuts[id] ?? [], layer: (factory: () => KeymapLayer) => { layers.push(factory) } },
     renderer: testing.renderer,
   } as unknown as Parameters<typeof plugin.setup>[0]
   let dispose = await plugin.setup(context)
-  const Composer = (props: { sessionID?: string; editor: (editor: TextareaRenderable) => void }) => <box height={4}>
+  const Composer = (props: { sessionID?: string; editor: (editor: TextareaRenderable) => void }) => <box height={7} paddingTop={4}>
     <textarea ref={(editor) => {
       Object.defineProperty(editor, "getClipboardText", { value: () => "", configurable: true })
       props.editor(editor)
     }} width={60} height={2} />
     <box height={1}>{footer({ sessionID: props.sessionID, mode: "normal", showDetails: false })}</box>
   </box>
-  const accept = () => layers.flatMap((layer) => layer().commands ?? []).find((command) => command.id === "quill.accept")!
+  const commands = () => layers.flatMap((layer) => layer().commands ?? [])
+  const accept = () => commands().find((command) => command.id === "quill.accept")!
+  const summon = () => commands().find((command) => command.id === "quill.summon")!
+  const down = () => commands().find((command) => command.bind === "down")!
   const enabled = () => { const value = accept().enabled; return typeof value === "function" ? value() : value }
   const frame = async () => { await new Promise<void>((resolve) => setImmediate(resolve)); await testing.renderOnce() }
   try {
@@ -56,6 +62,15 @@ test("mounted footer slots switch route ghosts, dispose on unmount, and release 
     await frame()
     expect(enabled(), "home suggestion").toBe(true)
     expect(home.plainText).toBe("please comp")
+    expect(testing.captureCharFrame()).toContain("⌃Y for 2 choices")
+    expect(summon().bind).toBeUndefined()
+    expect(down().run()).toBe(false)
+    expect(summon().run()).toBeUndefined()
+    await frame()
+    expect(testing.captureCharFrame()).toContain("› complete")
+    expect(down().run()).toBeUndefined()
+    await frame()
+    expect(testing.captureCharFrame()).toContain("› compare")
     const before = removed.mock.calls.length
     session.setText("please comp")
     session.gotoBufferEnd()
@@ -64,6 +79,8 @@ test("mounted footer slots switch route ghosts, dispose on unmount, and release 
     await frame()
     expect(removed.mock.calls.length).toBeGreaterThan(before)
     expect(enabled(), "session suggestion").toBe(true)
+    expect(down().run()).toBe(false)
+    expect(testing.captureCharFrame()).not.toContain("› compare")
     await accept().run?.()
     expect(session.plainText).not.toBe("please comp")
     expect(home.plainText).toBe("please comp")

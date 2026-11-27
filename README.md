@@ -201,9 +201,9 @@ Restart OpenCode after editing `cli.json`.
 | `minSuggestedWordLength` | `number` | `0` | Minimum number of characters in a suggested word, for both prose and shell suggestions; `0` allows any length. |
 | `acceptKeys` | `string[]` | `["tab", "right"]` | Keys that accept and insert the active word suggestion. |
 | `dismissKeys` | `string[]` | `["escape"]` | Keys that dismiss the visible suggestion without inserting. |
-| `cycleNextKeys` | `string[]` | `[]` | Opt-in keys for the next visible word suggestion, for example `["alt+n"]`. |
-| `cyclePreviousKeys` | `string[]` | `[]` | Opt-in keys for the previous visible word suggestion, for example `["alt+p"]`. |
-| `summonKeys` | `string[]` | `[]` | Opt-in keys to show candidates when no suggestion is visible, for example `["ctrl+y"]`. |
+| `cycleNextKeys` | `string[]` | `[]` | Opt-in keys to select the next alternative and open the picker, for example `["alt+n"]`. |
+| `cyclePreviousKeys` | `string[]` | `[]` | Opt-in keys to select the previous alternative and open the picker, for example `["alt+p"]`. |
+| `summonKeys` | `string[]` | `[]` | Opt-in keys to open the picker or summon candidates on demand, for example `["ctrl+y"]`. |
 
 `completeAtLineEnd` uses prose context only up to the cursor while checking
 code and attachment ranges across the full draft. It inserts only missing
@@ -212,31 +212,27 @@ replacements remain limited to chip-free draft ends. The suggestion must fit
 the visible cursor row; it never overwrites the next line. Acceptance preserves
 later lines, attachment metadata, host callbacks, and native undo/redo.
 
-Quill shows one inline suggestion by default. Configure a cycle binding to
-browse alternatives. A faint counter such as `1/3` shows which one is selected
-when space allows. Cycling changes only the ghost text; Tab accepts the
-selected suggestion. The list wraps and skips alternatives that do not fit on
-the cursor row. Without a visible alternative, cycle keys fall through.
+Quill shows one inline suggestion by default. To open the alternatives picker
+with Ctrl+Y, add this to the Quill plugin's `options`:
 
-Summon is off by default. A configured summon key can show lower-confidence
-candidates for the current draft when no suggestion is visible. It falls
-through when Quill has no eligible candidate. Editing the draft or moving the
-cursor resets the summoned list.
-
-Custom keybindings can also be overridden using OpenCode's standard
-`keybinds` map in `cli.json`:
-
-```jsonc
+```json
 {
-  "keybinds": {
-    "quill.accept": "tab",
-    "quill.dismiss": "ctrl+g",
-    "quill.next": "alt+n",
-    "quill.previous": "alt+p",
-    "quill.summon": "ctrl+y"
-  }
+  "summonKeys": ["ctrl+y"]
 }
 ```
+
+Press Ctrl+Y to see the available words above the active word. If no
+automatic suggestion appears, Ctrl+Y can summon lower-confidence candidates.
+While the list is visible, Up and Down move the highlight and the inline ghost previews the
+selection. Tab accepts it, Escape closes the list, and editing the draft or
+moving the cursor resets it. Enter keeps its usual behavior.
+
+For direct cycling, optionally set `cycleNextKeys` to `["alt+n"]` and
+`cyclePreviousKeys` to `["alt+p"]`. These open the picker and cycle immediately,
+even without a summon key. If there isn't room above the word, the cycle keys
+still work inline. With only a summon key, press it again to cycle inline.
+Cycling skips suggestions that don't fit on the cursor row. Up and Down keep
+their normal behavior when no picker is visible.
 
 Quill's accept/dismiss/cycle layer runs in base mode at priority `2`, only in
 the focused normal composer. A visible suggestion takes Tab/Right for

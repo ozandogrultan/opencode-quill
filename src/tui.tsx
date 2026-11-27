@@ -71,8 +71,23 @@ export default Plugin.define({
           selected: context.renderer.hasSelection,
           enabled: !disposed && settings.enabled && (!shell || shellEnabled()) && currentEditor() === editor,
         }
-      }, () => dimGhostColor(context.theme.text.muted), context.renderer, options.completeAtLineEnd, shellPredictor,
-      () => ["quill.next", "quill.previous"].some((id) => context.keymap.shortcuts(id).length > 0))
+      }, () => dimGhostColor(context.theme.text.muted), context.renderer, options.completeAtLineEnd, shellPredictor, () => {
+        const shortcut = (id: string) => context.keymap.shortcuts(id).map((key) => key.trim()).find((key) => key && !/[\u0000-\u001f\u007f-\u009f]/u.test(key))
+        const { text, background } = context.theme
+        return {
+          summon: shortcut("quill.summon"),
+          cycle: !!(shortcut("quill.next") || shortcut("quill.previous")),
+          accept: shortcut("quill.accept"),
+          dismiss: shortcut("quill.dismiss"),
+          colors: {
+            text: text.base,
+            muted: text.muted,
+            background: background.raised.base,
+            selectedText: text.selection,
+            selectedBackground: background.selection,
+          },
+        }
+      })
     }
 
     const sessionInfo = (sessionID: string) =>
