@@ -27,6 +27,10 @@ bun run lint:sh      # bash -n on every script
 
 CI runs the same checks plus ShellCheck on the scripts.
 
+For changes to prediction, `bun run eval` measures quality on your local
+OpenCode history and never writes prompt data. Compare before and after on the
+default test split and tune only against `--split val`.
+
 ## Guidelines
 
 - Read [AGENTS.md](AGENTS.md) first. It documents the layout and the hard-won

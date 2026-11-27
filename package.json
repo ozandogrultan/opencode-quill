@@ -48,6 +48,7 @@
     "test:changelog": "bash tests/changelog.sh",
     "typecheck": "tsc --noEmit",
     "lint:sh": "for script in install.sh tests/*.sh scripts/*.sh; do bash -n \"$script\" || exit; done",
+    "eval": "bun scripts/eval.ts",
     "prepublishOnly": "bun run test && bun run typecheck"
   },
   "dependencies": {

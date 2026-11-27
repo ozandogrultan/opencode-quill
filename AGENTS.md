@@ -14,6 +14,7 @@ README.md is the user-facing contract — read it before changing behavior.
 - `src/ghost.ts` — OpenTUI buffer painting, cursor tracking, eligibility checks, and insertion.
 - `src/options.ts` — option parsing and validation.
 - `src/keymap.ts` — reactive keymap layer construction for accept and dismiss actions.
+- `scripts/eval.ts` — `bun run eval`: replays your OpenCode history (read-only DB) through the predictor on a time split and prints aggregate metrics; never writes prompt text. `--split val|test`, `--json`, `--db <path>`, `--examples`.
 - `test/` — Bun unit and installer tests.
 - `bunfig.toml` — preloads the OpenTUI Solid transform for tests.
 - `install.sh` — copies sources and registers a directory in global `cli.json`.
@@ -47,6 +48,7 @@ bun install
 bun run test
 bun run typecheck
 bun run lint:sh
+bun run eval
 ```
 
 ## Hard-won rules
