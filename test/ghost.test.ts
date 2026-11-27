@@ -414,7 +414,7 @@ test("summon alone cycles inline after the first attempt cannot draw a picker", 
   expect(fixture.editor.plainText).toBe("please comp")
 })
 
-test("picker falls back to a counter rather than overwriting a previous draft row", async () => {
+test("picker anchors above the editor top when the cursor is on a later row and keeps earlier draft rows", async () => {
   const fixture = await setup("prior draft line\nplease comp", 22, false, () => true, 4, "Ctrl+Y")
   const model = new PersonalModel()
   model.observe(["please complete", "please compare"].flatMap((text) =>
@@ -424,12 +424,13 @@ test("picker falls back to a counter rather than overwriting a previous draft ro
   expect(fixture.captureCharFrame()).toMatch(/please (complete|compare)  1\/2/)
   expect(fixture.ghost.summon()).toBe(true)
   await fixture.renderOnce()
-  expect(fixture.ghost.pickerVisible()).toBe(false)
-  expect(fixture.captureCharFrame()).not.toContain("›")
-  expect(fixture.captureCharFrame()).toContain("prior draft line")
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  const rows = fixture.captureCharFrame().split("\n")
+  expect(rows.findIndex((row) => row.includes("›"))).toBeLessThan(fixture.editor.screenY)
+  expect(rows.join("\n")).toContain("prior draft line")
   expect(fixture.ghost.cycle(1)).toBe(true)
   await fixture.renderOnce()
-  expect(fixture.captureCharFrame()).toMatch(/please (complete|compare)  2\/2/)
+  expect(fixture.captureCharFrame()).toMatch(/› (complete|compare)/)
 })
 
 test("resize invalidates a drawn picker before repaint and restores only the fitting inline ghost", async () => {
@@ -836,4 +837,41 @@ test("picker background stays opaque on transparent and light themes", () => {
   const translucent = opaqueBackground([RGBA.fromValues(0.5, 0.5, 0.5, 0.5)], darkText)
   expect(translucent.a).toBe(1)
   expect(translucent.r).toBeGreaterThan(0.5)
+})
+
+async function pickerFixture() {
+  const fixture = await setup("漢字 CoMp", 60, false, () => false, 5, "Ctrl+Y")
+  spyOn(fixture.predictor, "candidates").mockReturnValue([
+    { word: "complete", suffix: "lete", confidence: 0.6 },
+    { word: "compare", suffix: "Compare", confidence: 0.4, replace: 4 },
+  ])
+  fixture.ghost.invalidate()
+  await fixture.renderOnce()
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  return fixture
+}
+
+test("a second summon press cycles while the picker is drawn", async () => {
+  const fixture = await pickerFixture()
+  expect(fixture.captureCharFrame()).toContain("› CoMplete")
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  expect(fixture.captureCharFrame()).toContain("› Compare")
+  expect(fixture.editor.plainText).toBe("漢字 CoMp")
+})
+
+test("a scroll between paint and keypress hides the picker from the arrow commands", async () => {
+  const fixture = await pickerFixture()
+  const down = completionLayer(resolveOptions({}), () => fixture.ghost).commands!.find((command) => command.bind === "down")!
+  expect((down.enabled as () => boolean)()).toBe(true)
+  const real = fixture.editor.visualCursor
+  Object.defineProperty(fixture.editor, "visualCursor", { value: { ...real, visualRow: real.visualRow + 1 }, configurable: true })
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect((down.enabled as () => boolean)()).toBe(false)
+  expect(down.run()).toBe(false)
+  delete (fixture.editor as unknown as Record<string, unknown>).visualCursor
+  expect(fixture.ghost.pickerVisible()).toBe(true)
 })

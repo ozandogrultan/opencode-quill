@@ -58,7 +58,7 @@ bun run eval
 - Register local TUI plugin directories in `cli.json`, not individual files.
 - Suggestions must not enter the text buffer until explicitly accepted.
 - Acceptance inserts or replaces the active word and never submits, overwrites unrelated draft text, or uses the clipboard.
-- Capture keys only in the focused normal composer. Acceptance, dismissal, and cycling require a visible suggestion; explicit summon requires an eligible draft and a fitting candidate.
+- Capture keys only in the focused normal composer. Acceptance, dismissal, and cycling require a visible suggestion; Up and Down are captured only while the picker is drawn; explicit summon requires an eligible draft and a fitting candidate.
 - Preserve host handlers, hints, selections, attachments, undo state, and other plugins.
 - Ghost owns empty-composer next-prompt suggestions; Quill targets non-empty prose drafts.
 - Ghost text dim level must match Ghost (dimmed muted theme text; see `dimGhostColor` in `src/ghost.ts`).

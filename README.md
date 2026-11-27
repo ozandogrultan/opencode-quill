@@ -221,7 +221,9 @@ with Ctrl+Y, add this to the Quill plugin's `options`:
 }
 ```
 
-Press Ctrl+Y to see the available words above the active word. If no
+Press Ctrl+Y to see the available words in a box above the active word, or
+above the top of the editor when the cursor is below its first row. The box
+uses an opaque background even on transparent themes. If no
 automatic suggestion appears, Ctrl+Y can summon lower-confidence candidates.
 While the list is visible, Up and Down move the highlight and the inline ghost previews the
 selection. Tab accepts it, Escape closes the list, and editing the draft or
@@ -230,9 +232,31 @@ moving the cursor resets it. Enter keeps its usual behavior.
 For direct cycling, optionally set `cycleNextKeys` to `["alt+n"]` and
 `cyclePreviousKeys` to `["alt+p"]`. These open the picker and cycle immediately,
 even without a summon key. If there isn't room above the word, the cycle keys
-still work inline. With only a summon key, press it again to cycle inline.
+still work inline. With a summon key, pressing it again selects the next
+alternative, with or without the picker drawn.
 Cycling skips suggestions that don't fit on the cursor row. Up and Down keep
 their normal behavior when no picker is visible.
+
+Each key may be bound to only one action, and keys must not contain commas;
+invalid options fail at startup. Bindings can also be overridden with
+OpenCode's standard `keybinds` map in `cli.json`, using the command ids
+`quill.accept`, `quill.dismiss`, `quill.next`, `quill.previous` and
+`quill.summon`:
+
+```jsonc
+{
+  "keybinds": {
+    "quill.accept": "tab",
+    "quill.dismiss": "ctrl+g",
+    "quill.next": "alt+n",
+    "quill.previous": "alt+p",
+    "quill.summon": "ctrl+y"
+  }
+}
+```
+
+Hints in the picker and counter show the first displayable shortcut for each
+command.
 
 Quill's accept/dismiss/cycle layer runs in base mode at priority `2`, only in
 the focused normal composer. A visible suggestion takes Tab/Right for
@@ -293,7 +317,8 @@ Quill learns from your own submitted prompts, never from assistant output:
   without repeated context also require higher confidence. If a typed prose
   prefix of two or more letters is already a confident word, a longer
   word is also offered when it scores at least 40% as high in the current
-  context (typing `local` offers `locally`). Shell mode shows nothing when
+  context (typing `local` offers `locally`); the two-letter guard raises the
+  confidence that offer needs as well. Shell mode shows nothing when
   the typed command is already the most likely word.
 - **Typo fallback:** when prefix completion is not confident enough, nearby
   words are ranked with an edit penalty and a stricter confidence threshold.
@@ -305,7 +330,8 @@ Quill learns from your own submitted prompts, never from assistant output:
   apostrophe contractions, including missing apostrophes. A missing apostrophe
   can be restored even when the typed word exists if the contraction has
   repeated evidence and accounts for more than half of the learned continuations
-  after the previous word. Deletions repair only doubled letters. A final letter
+  after the previous word; the contraction is listed first and other completions
+  remain reachable by cycling or summoning. Deletions repair only doubled letters. A final letter
   after an otherwise known word does not trigger a longer typo completion
   by substitution alone.
   Equally scored spelling repairs are withheld unless explicitly summoned.
