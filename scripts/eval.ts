@@ -1,10 +1,10 @@
 import { Database } from "bun:sqlite"
-import { chmodSync } from "node:fs"
+import { lstatSync, mkdirSync, realpathSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { join, relative, resolve } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path"
 import frequencies from "subtlex-word-frequencies"
 import { completionQuery, proseGrammar, type Grammar } from "../src/prose"
-import { PersonalModel, WordPredictor } from "../src/predictor"
+import { PersonalModel, WordPredictor, type Prediction } from "../src/predictor"
 import { shellGrammar } from "../src/shell"
 
 const args = process.argv.slice(2)
@@ -43,11 +43,34 @@ async function fromFile(path: string): Promise<Corpus> {
   return Array.isArray(data) ? { prose: data, shell: [] } : { prose: data.prose ?? [], shell: data.shell ?? [] }
 }
 
+function freezeParent(path: string): string {
+  let parent = isAbsolute(path) ? sep : realpathSync(process.cwd())
+  for (const part of path.split(sep)) {
+    if (part === "..") parent = dirname(parent)
+    else if (part && part !== ".") {
+      const child = join(parent, part)
+      const entry = lstatSync(child, { throwIfNoEntry: false })
+      parent = entry ? realpathSync(child) : child
+      if (entry && !(entry.isSymbolicLink() ? statSync(parent) : entry).isDirectory()) throw new Error("--freeze parent must be a directory")
+    }
+  }
+  return parent
+}
+
 if (freezePath) {
-  if (!relative(resolve(import.meta.dir, ".."), resolve(freezePath)).startsWith("..")) throw new Error("--freeze must write outside the repository")
+  const root = dirname(realpathSync(import.meta.dir))
+  const outsideRepo = (parent: string) => {
+    const path = relative(root, parent)
+    if (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path)) throw new Error("--freeze must write outside the repository")
+    return parent
+  }
+  const name = basename(freezePath)
+  if (!name || name === "." || name === ".." || freezePath.endsWith(sep)) throw new Error("--freeze requires a file path")
+  const parent = outsideRepo(freezeParent(dirname(freezePath)))
   const corpus = fromDatabase()
-  await Bun.write(freezePath, JSON.stringify(corpus))
-  chmodSync(freezePath, 0o600)
+  mkdirSync(parent, { recursive: true, mode: 0o700 })
+  const destination = join(outsideRepo(realpathSync(parent)), name)
+  writeFileSync(destination, JSON.stringify(corpus), { flag: "wx", mode: 0o600 })
   console.log(`froze ${corpus.prose.length} prompts and ${corpus.shell.length} shell commands to ${freezePath}`)
   process.exit(0)
 }
@@ -80,47 +103,69 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
   }
   const missed = new Map<string, number>()
   for (const prompt of test) {
+    let cursor = 0
+    let query: ReturnType<typeof completionQuery>
+    let candidates: Prediction[] = []
+    function replayTo(offset: number) {
+      while (cursor < offset) {
+        const previous = cursor
+        cursor += prompt.text.codePointAt(cursor)! > 0xffff ? 2 : 1
+        const text = prompt.text.slice(0, cursor)
+        const last = candidates[0]
+        query = completionQuery(text, cursor, [], true, grammar)
+        candidates = query ? predictor.candidates(query) : []
+        if (query && !query.next && last && !last.replace) {
+          const typed = text.slice(previous)
+          if (last.suffix.startsWith(typed) && typed.length < last.suffix.length) {
+            const sticky = { ...last, suffix: last.suffix.slice(typed.length) }
+            candidates = [sticky, ...candidates.filter((candidate) => candidate.word !== sticky.word)]
+          }
+        }
+      }
+      return { query, candidates }
+    }
     for (const sequence of grammar.sequences(prompt.text)) {
       for (let index = 0; index < sequence.length; index++) {
-        const { text: word, start } = sequence[index]
-        const length = [...word].length
+        const { text: word, start, end } = sequence[index]
+        const chars = [...prompt.text.slice(start, end)]
+        const length = chars.length
+        const target = prompt.text.slice(0, end)
+        const matches = (prediction: Prediction, offset: number) =>
+          prompt.text.slice(0, offset - (prediction.replace ?? 0)) + prediction.suffix === target
         m.words++
         m.wordChars += length
-        if (index > 0) {
-          const query = completionQuery(prompt.text.slice(0, start), start, [], true, grammar)
-          if (query?.next) {
-            m.nextPositions++
-            const candidates = predictor.candidates(query)
-            if (candidates.length) {
-              m.nextShown++
-              if (candidates[0].word === word) {
-                m.nextTop1++
-                m.nextSaved += Math.max(0, length - 1)
-              } else m.nextWrong++
-            }
-            if ((bigrams.get(`${sequence[index - 1].text}\0${word}`) ?? 0) >= 2) {
-              m.bigramKnown++
-              if (!candidates.some((candidate) => candidate.word === word)) m.bigramMissed++
-            }
+        const next = replayTo(start)
+        if (index > 0 && next.query?.next) {
+          m.nextPositions++
+          if (next.candidates.length) {
+            m.nextShown++
+            if (matches(next.candidates[0], start)) {
+              m.nextTop1++
+              m.nextSaved += Math.max(0, length - 1)
+            } else m.nextWrong++
+          }
+          if ((bigrams.get(`${sequence[index - 1].text}\0${word}`) ?? 0) >= 2) {
+            m.bigramKnown++
+            if (!next.candidates.some((candidate) => matches(candidate, start))) m.bigramMissed++
           }
         }
         let first = -1
         let top5 = false
+        let offset = start
         for (let k = 1; k < length; k++) {
-          const typed = prompt.text.slice(start, start + k)
-          const query = completionQuery(prompt.text.slice(0, start) + typed, start + k, [], true, grammar)
+          offset += chars[k - 1].length
+          const { query, candidates } = replayTo(offset)
           if (!query || query.next) continue
           m.positions++
-          const candidates = predictor.candidates(query)
           if (!candidates.length) continue
           m.shown++
-          if (candidates[0].word === word && candidates[0].replace === undefined) {
+          if (matches(candidates[0], offset)) {
             if (first < 0) first = k
           } else {
             m.wrongShown++
             wrongByPrefix[k >= 4 ? "4+" : String(k)]++
           }
-          if (candidates.some((candidate) => candidate.word === word)) top5 = true
+          if (candidates.slice(0, 5).some((candidate) => matches(candidate, offset))) top5 = true
         }
         if (first > 0) {
           m.wordsTop1++
@@ -146,7 +191,7 @@ if (flag("--json")) {
 } else {
   console.log(`source: ${result.source}`)
   console.log(`split: ${split} (train on the oldest ${split === "val" ? 64 : 80}%, report on the next ${split === "val" ? 16 : 20}%)`)
-  console.log("chars saved: prefix = word length - prefix typed - 1 at the first prefix whose top-1 is right; next-word = word length - 1 when top-1 is right")
+  console.log("chars saved (code points): prefix = word length - prefix typed - 1 at the first prefix whose top-1 is right; next-word = word length - 1 when top-1 is right")
   for (const name of ["prose", "shell"] as const) {
     const m = result[name]
     console.log(`\n${name}: train ${m.train}, test ${m.test} prompts, ${m.words} words`)
