@@ -676,3 +676,49 @@ test("shouted length-changing casing replaces the whole word in capitals", () =>
   const text = "we love İS"
   expect(predictor.candidates(completionQuery(text, text.length)!, 1)[0]).toMatchObject({ suffix: "İSTANBUL", replace: 2 })
 })
+
+test("offers a strong longer word when the typed word is already complete", () => {
+  const predictor = new WordPredictor([])
+  const learn = (pairs: [string, number][]) => {
+    const model = new PersonalModel()
+    model.observe(pairs.flatMap(([text, count]) => Array(count).fill(text)).map((text, index) => ({ id: String(index), text })))
+    predictor.setPersonal(model.snapshot())
+  }
+  learn([["run local tests", 6], ["run locally now", 4]])
+  expect(complete(predictor, "run local")).toMatchObject({ word: "locally", suffix: "ly" })
+  learn([["run local tests", 20], ["run locally now", 2]])
+  expect(complete(predictor, "run local")).toBeUndefined()
+})
+
+test("longer words that outrank the typed word still need confidence", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["run con", 2], ["run config", 3], ["run context", 3], ["run console", 3]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "run con")).toBeUndefined()
+})
+
+test("single-letter prefixes need higher confidence than longer ones", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe([["fix the bug", 4], ["fix them all", 3], ["fix tests now", 3], ["fix this one", 2]].flatMap(([text, count]) => Array(count as number).fill(text)).map((text, index) => ({ id: String(index), text })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "fix t")).toBeUndefined()
+  expect(complete(predictor, "fix th")).toMatchObject({ word: "the" })
+})
+
+test("completes contractions after the apostrophe", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe(Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: "i'd like that" })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "i'")?.word).toBe("i'd")
+})
+
+test("does not typo-correct a trailing apostrophe", () => {
+  const model = new PersonalModel()
+  const predictor = new WordPredictor([])
+  model.observe(Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: "ask the user's team" })))
+  predictor.setPersonal(model.snapshot())
+  expect(complete(predictor, "ask the users'")).toBeUndefined()
+})

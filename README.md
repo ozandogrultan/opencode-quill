@@ -273,7 +273,7 @@ Quill learns from your own submitted prompts, never from assistant output:
   syntax are never learned as adjacent.
 - A word missing from the base vocabulary becomes suggestible only after it
   has been seen more than once, and not while it is a prefix of a learned word
-  you use at least as often (`addr` yields to `addressed`).
+  you use at least three times as often (`addr` yields to `addressed`).
 - Casing is learned from words written mid-sentence; sentence-initial
   capitals are ignored.
 
@@ -286,8 +286,9 @@ Quill learns from your own submitted prompts, never from assistant output:
 - **Current draft:** words already in the draft get a small boost.
 - **Confidence gating:** a suggestion is shown only when it clears a
   confidence threshold, which is stricter for next-word predictions than for
-  prefix completions. If the typed prefix is already the most likely word,
-  nothing is shown.
+  prefix completions and for single-letter prefixes. If the typed prefix is
+  already a confident word, a longer word is also offered when it scores at
+  least 40% as high in the current context (typing `local` offers `locally`).
 - **Typo fallback:** when prefix completion is not confident enough, nearby
   words are ranked with an edit penalty and a stricter confidence threshold.
   Correction confidence is the edit-penalized model score. Suggestions must
