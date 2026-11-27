@@ -100,7 +100,8 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
     train: train.length, test: test.length, words: 0, wordChars: 0,
     positions: 0, shown: 0, wrongShown: 0, wrongByPrefix,
     wordsTop1: 0, wordsTop5: 0, prefixSaved: 0,
-    nextPositions: 0, nextShown: 0, nextTop1: 0, nextWrong: 0, nextSaved: 0, bigramMissed: 0, bigramKnown: 0,
+    nextPositions: 0, nextShown: 0, nextTop1: 0, nextWrong: 0, nextSaved: 0,
+    bigramKnown: 0, bigramMissed: 0, bigramMissedNoSuggestion: 0, bigramMissedWrongList: 0,
   }
   const missed = new Map<string, number>()
   const alternatives = { wordsTop3: 0, wordsTop3WithSummon: 0, automaticSaved: 0, cycleSaved: 0, netSaved: 0, cyclePresses: 0, summonPresses: 0, acceptPresses: 0 }
@@ -171,7 +172,11 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
           }
           if ((bigrams.get(`${sequence[index - 1].text}\0${word}`) ?? 0) >= 2) {
             m.bigramKnown++
-            if (!next.candidates.some((candidate) => matches(candidate, start))) m.bigramMissed++
+            if (!next.candidates.some((candidate) => matches(candidate, start))) {
+              m.bigramMissed++
+              if (next.candidates.length) m.bigramMissedWrongList++
+              else m.bigramMissedNoSuggestion++
+            }
           }
         }
         let first = -1
@@ -243,7 +248,8 @@ if (flag("--json")) {
       ["chars saved, prefix", m.prefixSaved],
       ["chars saved, next-word", m.nextSaved],
       ["next-word shown / top-1 / wrong", `${m.nextShown} / ${m.nextTop1} / ${m.nextWrong}`],
-      ["bigram known but not shown", `${m.bigramMissed} of ${m.bigramKnown}`],
+      ["known bigram missing target", `${m.bigramMissed} of ${m.bigramKnown}`],
+      ["  no suggestion / wrong list", `${m.bigramMissedNoSuggestion} / ${m.bigramMissedWrongList}`],
     ]
     for (const [label, count] of rows) console.log(`  ${label.padEnd(34)}${count}`)
     if (m.alternatives) {

@@ -64,8 +64,8 @@ test("freezes synthetic history only in new owner-only files outside the real re
   })
 })
 
-function metrics(training: string, ...targets: string[]) {
-  const train = Array<string>(targets.length * 4).fill(training)
+function metrics(training: string | string[], ...targets: string[]) {
+  const train = typeof training === "string" ? Array<string>(targets.length * 4).fill(training) : training
   const prompts = [...train, ...targets].map((text, id) => ({ id: String(id), text }))
   return withTemp((directory) => {
     const path = join(directory, "prompts.json")
@@ -84,10 +84,24 @@ test("scores case and apostrophes as typed and carries next-word ghost text into
     nextWrong: 2,
     nextSaved: 2,
     bigramMissed: 2,
+    bigramMissedNoSuggestion: 0,
+    bigramMissedWrongList: 2,
     wordsTop1: 4,
     wordsTop5: 4,
     prefixSaved: 1,
     wrongByPrefix: { "1": 2, "2": 2 },
+  })
+})
+
+test("counts known-bigram misses when no automatic candidate is shown", () => {
+  const training = ["tests", "builds", "checks", "scripts"].flatMap((word) => [`run ${word}`, `run ${word}`])
+  expect(metrics(training, "run tests", "hello")).toMatchObject({
+    nextPositions: 1,
+    nextShown: 0,
+    bigramKnown: 1,
+    bigramMissed: 1,
+    bigramMissedNoSuggestion: 1,
+    bigramMissedWrongList: 0,
   })
 })
 
