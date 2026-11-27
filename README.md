@@ -201,9 +201,9 @@ Restart OpenCode after editing `cli.json`.
 | `minSuggestedWordLength` | `number` | `0` | Minimum number of characters in a suggested word, for both prose and shell suggestions; `0` allows any length. |
 | `acceptKeys` | `string[]` | `["tab", "right"]` | Keys that accept and insert the active word suggestion. |
 | `dismissKeys` | `string[]` | `["escape"]` | Keys that dismiss the visible suggestion without inserting. |
-| `cycleNextKeys` | `string[]` | `[]` | Opt-in keys for the next visible word suggestion, for example `["alt+]"]`. |
-| `cyclePreviousKeys` | `string[]` | `[]` | Opt-in keys for the previous visible word suggestion, for example `["alt+["]`. |
-| `summonKeys` | `string[]` | `[]` | Opt-in keys to show candidates when no suggestion is visible, for example `["ctrl+space"]`. |
+| `cycleNextKeys` | `string[]` | `[]` | Opt-in keys for the next visible word suggestion, for example `["alt+n"]`. |
+| `cyclePreviousKeys` | `string[]` | `[]` | Opt-in keys for the previous visible word suggestion, for example `["alt+p"]`. |
+| `summonKeys` | `string[]` | `[]` | Opt-in keys to show candidates when no suggestion is visible, for example `["ctrl+y"]`. |
 
 `completeAtLineEnd` uses prose context only up to the cursor while checking
 code and attachment ranges across the full draft. It inserts only missing
@@ -229,11 +229,11 @@ Custom keybindings can also be overridden using OpenCode's standard
 ```jsonc
 {
   "keybinds": {
-    "quill.accept": "ctrl+y",
+    "quill.accept": "tab",
     "quill.dismiss": "ctrl+g",
     "quill.next": "alt+n",
     "quill.previous": "alt+p",
-    "quill.summon": "ctrl+space"
+    "quill.summon": "ctrl+y"
   }
 }
 ```
