@@ -84,6 +84,8 @@ test("scores case and apostrophes as typed and carries next-word ghost text into
     nextWrong: 2,
     nextSaved: 2,
     bigramMissed: 2,
+    bigramMissedNoSuggestion: 0,
+    bigramMissedWrongList: 2,
     wordsTop1: 4,
     wordsTop5: 4,
     prefixSaved: 1,
