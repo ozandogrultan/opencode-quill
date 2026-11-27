@@ -8,7 +8,7 @@ import { proseGrammar } from "../src/prose"
 const cleanups: (() => void)[] = []
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup() })
 
-async function setup(text = "please comp", width = 60, completeAtLineEnd = false) {
+async function setup(text = "please comp", width = 60, completeAtLineEnd = false, showAlternativeCounter = () => false) {
   const testing = await createTestRenderer({ width, height: 8 })
   cleanups.push(() => testing.renderer.destroy())
   const parent = new BoxRenderable(testing.renderer, { id: "composer", width, height: 4, paddingLeft: 2, paddingTop: 1 })
@@ -20,7 +20,7 @@ async function setup(text = "please comp", width = 60, completeAtLineEnd = false
   editor.focus()
   const view: Composer = { editor, normal: true, focused: editor, mode: "base", selected: false, enabled: true }
   const predictor = new WordPredictor([{ word: "complete", count: 10 }, { word: "réviser", count: 10 }])
-  const ghost = new ComposerGhost(editor, predictor, () => view, () => RGBA.fromHex("#888888"), testing.renderer, completeAtLineEnd)
+  const ghost = new ComposerGhost(editor, predictor, () => view, () => RGBA.fromHex("#888888"), testing.renderer, completeAtLineEnd, undefined, showAlternativeCounter)
   cleanups.push(() => ghost.dispose())
   await testing.renderOnce()
   return { ...testing, editor, ghost, view, predictor }
@@ -197,15 +197,21 @@ test.each([13, 14, 16])("line-end ghost never overwrites the next logical line w
 })
 
 test("cycles confident alternatives without editing, wraps, and accepts with native undo", async () => {
-  const fixture = await setup()
+  let showAlternativeCounter = false
+  const fixture = await setup("please comp", 60, false, () => showAlternativeCounter)
   const model = new PersonalModel()
   model.observe(Array.from({ length: 10 }, (_, index) => ({ id: String(index), text: index < 6 ? "please complete" : "please compare" })))
   fixture.predictor.setPersonal(model.snapshot())
   await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please complete")
+  expect(fixture.captureCharFrame()).not.toContain("1/2")
+  showAlternativeCounter = true
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please complete  1/2")
   expect(fixture.ghost.cycle(1)).toBe(true)
   expect(fixture.editor.plainText).toBe("please comp")
   await fixture.renderOnce()
-  expect(fixture.captureCharFrame()).toContain("please compare")
+  expect(fixture.captureCharFrame()).toContain("please compare  2/2")
   expect(fixture.ghost.cycle(1)).toBe(true)
   await fixture.renderOnce()
   expect(fixture.captureCharFrame()).toContain("please complete")
@@ -217,6 +223,27 @@ test("cycles confident alternatives without editing, wraps, and accepts with nat
   expect(fixture.editor.plainText).toBe("please comp")
   expect(fixture.editor.redo()).toBe(true)
   expect(fixture.editor.plainText).toBe("please compare")
+})
+
+test("summon shows low-confidence alternatives for the current draft only", async () => {
+  const fixture = await setup("please lo", 60, false, () => true)
+  const model = new PersonalModel()
+  model.observe(["local", "locally", "location", "locus", "lock", "locker"].flatMap((word) =>
+    [1, 2].map((number) => ({ id: `${word}:${number}`, text: word }))))
+  fixture.predictor.setPersonal(model.snapshot())
+  await fixture.renderOnce()
+  expect(fixture.ghost.visible()).toBe(false)
+  fixture.view.selected = true
+  expect(fixture.ghost.summon()).toBe(false)
+  fixture.view.selected = false
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toMatch(/please lo\w+ +1\/5/)
+  expect(fixture.ghost.summon()).toBe(false)
+  fixture.editor.insertText("x")
+  await fixture.renderOnce()
+  expect(fixture.ghost.visible()).toBe(false)
+  expect(fixture.editor.plainText).toBe("please lox")
 })
 
 test("cycling falls through for a single candidate and invalidates on model or extmark changes", async () => {

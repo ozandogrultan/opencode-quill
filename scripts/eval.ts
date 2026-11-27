@@ -18,6 +18,7 @@ if (split !== "val" && split !== "test") throw new Error("--split must be val or
 const dbPath = value("--db") ?? join(homedir(), ".local/share/opencode/opencode.db")
 const promptsPath = value("--prompts")
 const freezePath = value("--freeze")
+const measureAlternatives = flag("--alternatives")
 
 type Prompt = { id: string; text: string }
 type Corpus = { prose: Prompt[]; shell: Prompt[] }
@@ -102,6 +103,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
     nextPositions: 0, nextShown: 0, nextTop1: 0, nextWrong: 0, nextSaved: 0, bigramMissed: 0, bigramKnown: 0,
   }
   const missed = new Map<string, number>()
+  const alternatives = { wordsTop3: 0, wordsTop3WithSummon: 0, automaticSaved: 0, cycleSaved: 0, netSaved: 0, cyclePresses: 0, summonPresses: 0, acceptPresses: 0 }
   for (const prompt of test) {
     let cursor = 0
     let query: ReturnType<typeof completionQuery>
@@ -132,10 +134,33 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
         const target = prompt.text.slice(0, end)
         const matches = (prediction: Prediction, offset: number) =>
           prompt.text.slice(0, offset - (prediction.replace ?? 0)) + prediction.suffix === target
+        let top3 = false
+        let top3WithSummon = false
+        let automaticSaved = 0
+        let cycleSaved = 0
+        let best = { saved: 0, cycles: 0, summons: 0 }
+        const measure = (position: NonNullable<typeof query>, visible: Prediction[], offset: number, remaining: number) => {
+          const summons = visible.length ? 0 : 1
+          const choices = visible.length ? visible : predictor.candidates(position, 5, true)
+          const rank = choices.findIndex((prediction) => matches(prediction, offset))
+          if (rank < 0) return
+          top3 ||= !summons && rank < 3
+          top3WithSummon ||= rank < 3
+          const cycles = Math.min(rank, choices.length - rank)
+          const saved = remaining - 1 - cycles - summons
+          if (!summons) {
+            cycleSaved = Math.max(cycleSaved, saved)
+            if (!cycles) automaticSaved = Math.max(automaticSaved, saved)
+          }
+          if (saved > best.saved || (saved > 0 && saved === best.saved && cycles + summons < best.cycles + best.summons)) {
+            best = { saved, cycles, summons }
+          }
+        }
         m.words++
         m.wordChars += length
         const next = replayTo(start)
         if (index > 0 && next.query?.next) {
+          if (measureAlternatives) measure(next.query, next.candidates, start, length)
           m.nextPositions++
           if (next.candidates.length) {
             m.nextShown++
@@ -156,6 +181,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
           offset += chars[k - 1].length
           const { query, candidates } = replayTo(offset)
           if (!query || query.next) continue
+          if (measureAlternatives) measure(query, candidates, offset, length - k)
           m.positions++
           if (!candidates.length) continue
           m.shown++
@@ -172,10 +198,20 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
           m.prefixSaved += Math.max(0, length - first - 1)
         } else if (examples && length >= 3) missed.set(word, (missed.get(word) ?? 0) + 1)
         if (top5) m.wordsTop5++
+        if (measureAlternatives) {
+          alternatives.wordsTop3 += Number(top3)
+          alternatives.wordsTop3WithSummon += Number(top3WithSummon)
+          alternatives.automaticSaved += automaticSaved
+          alternatives.cycleSaved += cycleSaved
+          alternatives.netSaved += best.saved
+          alternatives.cyclePresses += best.cycles
+          alternatives.summonPresses += best.summons
+          alternatives.acceptPresses += Number(best.saved > 0)
+        }
       }
     }
   }
-  return { ...m, missedWords: examples ? [...missed].sort((a, b) => b[1] - a[1]).slice(0, 15) : undefined }
+  return { ...m, alternatives: measureAlternatives ? alternatives : undefined, missedWords: examples ? [...missed].sort((a, b) => b[1] - a[1]).slice(0, 15) : undefined }
 }
 
 const examples = flag("--examples")
@@ -192,6 +228,7 @@ if (flag("--json")) {
   console.log(`source: ${result.source}`)
   console.log(`split: ${split} (train on the oldest ${split === "val" ? 64 : 80}%, report on the next ${split === "val" ? 16 : 20}%)`)
   console.log("chars saved (code points): prefix = word length - prefix typed - 1 at the first prefix whose top-1 is right; next-word = word length - 1 when top-1 is right")
+  if (measureAlternatives) console.log("alternatives: best available action per word, assuming the list fits and the intended candidate is known")
   for (const name of ["prose", "shell"] as const) {
     const m = result[name]
     console.log(`\n${name}: train ${m.train}, test ${m.test} prompts, ${m.words} words`)
@@ -209,6 +246,12 @@ if (flag("--json")) {
       ["bigram known but not shown", `${m.bigramMissed} of ${m.bigramKnown}`],
     ]
     for (const [label, count] of rows) console.log(`  ${label.padEnd(34)}${count}`)
+    if (m.alternatives) {
+      const a = m.alternatives
+      console.log(`  top-3 words, visible / summoned  ${a.wordsTop3} / ${a.wordsTop3WithSummon} of ${m.words} (summoned includes visible)`)
+      console.log(`  net saved, automatic / cycle / summon  ${a.automaticSaved} / ${a.cycleSaved} / ${a.netSaved}`)
+      console.log(`  presses, accept / cycle / summon  ${a.acceptPresses} / ${a.cyclePresses} / ${a.summonPresses}`)
+    }
     if (m.missedWords) console.log(`  top missed words: ${m.missedWords.map(([word, count]) => `${word}:${count}`).join(" ")}`)
   }
 }

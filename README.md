@@ -201,8 +201,9 @@ Restart OpenCode after editing `cli.json`.
 | `minSuggestedWordLength` | `number` | `0` | Minimum number of characters in a suggested word, for both prose and shell suggestions; `0` allows any length. |
 | `acceptKeys` | `string[]` | `["tab", "right"]` | Keys that accept and insert the active word suggestion. |
 | `dismissKeys` | `string[]` | `["escape"]` | Keys that dismiss the visible suggestion without inserting. |
-| `cycleNextKeys` | `string[]` | `[]` | Optional keys for the next confident word suggestion. |
-| `cyclePreviousKeys` | `string[]` | `[]` | Optional keys for the previous confident word suggestion. |
+| `cycleNextKeys` | `string[]` | `[]` | Opt-in keys for the next visible word suggestion, for example `["alt+]"]`. |
+| `cyclePreviousKeys` | `string[]` | `[]` | Opt-in keys for the previous visible word suggestion, for example `["alt+["]`. |
+| `summonKeys` | `string[]` | `[]` | Opt-in keys to show candidates when no suggestion is visible, for example `["ctrl+space"]`. |
 
 `completeAtLineEnd` uses prose context only up to the cursor while checking
 code and attachment ranges across the full draft. It inserts only missing
@@ -211,12 +212,16 @@ replacements remain limited to chip-free draft ends. The suggestion must fit
 the visible cursor row; it never overwrites the next line. Acceptance preserves
 later lines, attachment metadata, host callbacks, and native undo/redo.
 
-Cycling changes only the ghost text; Tab still accepts the selected suggestion.
-Alternatives use the same confidence and typo guards as the best suggestion.
-The ranked list is capped at five, wraps in either direction, and resets when
-the draft, cursor, attachment ranges, or learned model changes. Alternatives
-that do not fit the visible cursor row are skipped. Without a visible,
-eligible alternative, cycle keys fall through to OpenCode.
+Quill shows one inline suggestion by default. Configure a cycle binding to
+browse alternatives. A faint counter such as `1/3` shows which one is selected
+when space allows. Cycling changes only the ghost text; Tab accepts the
+selected suggestion. The list wraps and skips alternatives that do not fit on
+the cursor row. Without a visible alternative, cycle keys fall through.
+
+Summon is off by default. A configured summon key can show lower-confidence
+candidates for the current draft when no suggestion is visible. It falls
+through when Quill has no eligible candidate. Editing the draft or moving the
+cursor resets the summoned list.
 
 Custom keybindings can also be overridden using OpenCode's standard
 `keybinds` map in `cli.json`:
@@ -227,7 +232,8 @@ Custom keybindings can also be overridden using OpenCode's standard
     "quill.accept": "ctrl+y",
     "quill.dismiss": "ctrl+g",
     "quill.next": "alt+n",
-    "quill.previous": "alt+p"
+    "quill.previous": "alt+p",
+    "quill.summon": "ctrl+space"
   }
 }
 ```
@@ -246,9 +252,8 @@ handlers remain in control. Dialogs and selections also suppress Quill.
 - `/quill shell on` / `/quill shell off` — Set shell-mode autocomplete explicitly.
 - `/quill clear casing` (alias `/quill reset casing`) — Forget only the learned word casing (`OpenCode`, `GitHub`), keeping the vocabulary and phrases.
 - `/quill clear` (alias `/quill reset`) — Erase everything Quill has learned from your prompts and shell commands.
-- `quill.next` / `quill.previous` — Keymap commands for cycling visible word
-  alternatives; no default bindings. Configure the cycle options above or
-  OpenCode's `keybinds` map.
+- `quill.next` / `quill.previous` / `quill.summon` — Keymap commands for cycling
+  or summoning word alternatives.
 - **Command Palette (`Ctrl+P`)** — Includes **Word autocomplete: on/off** and
   **Clear word autocomplete history**.
 

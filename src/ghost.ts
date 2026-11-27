@@ -42,7 +42,7 @@ export function findComposer(marker: Renderable | undefined, isEditor: (node: Re
 export class ComposerGhost {
   private shown: { text: string; offset: number; prediction: Prediction; marks: string; revision: number; predictor: WordPredictor } | undefined
   private dismissed: { text: string; offset: number } | undefined
-  private memo: { text: string; offset: number; marks: string; revision: number; predictor: WordPredictor; predictions: Prediction[]; index: number } | undefined
+  private memo: { text: string; offset: number; marks: string; revision: number; predictor: WordPredictor; predictions: Prediction[]; index: number; summoned: boolean } | undefined
   private disposed = false
   private readonly draw: (buffer: OptimizedBuffer, delta: number) => void
 
@@ -54,6 +54,7 @@ export class ComposerGhost {
     private readonly renderer: CliRenderer,
     private readonly completeAtLineEnd = false,
     private readonly shellPredictor?: WordPredictor,
+    private readonly showAlternativeCounter = () => false,
   ) {
     this.draw = (buffer) => { if (!this.disposed) this.paint(buffer) }
     renderer.addPostProcessFn(this.draw)
@@ -110,14 +111,14 @@ export class ComposerGhost {
     if ((marks.length || offset !== text.length) && predictions[0]?.replace) predictions.length = 0
     else if (marks.length || offset !== text.length) predictions.splice(0, predictions.length, ...predictions.filter((prediction) => !prediction.replace))
     const last = this.shown
-    if (query && !query.next && offset === text.length && last && last.offset === last.text.length && this.memo?.index === 0 && last.revision === revision && last.predictor === predictor && last.marks === signature && !last.prediction.replace && text.startsWith(last.text)) {
+    if (query && !query.next && offset === text.length && last && last.offset === last.text.length && this.memo?.index === 0 && !this.memo.summoned && last.revision === revision && last.predictor === predictor && last.marks === signature && !last.prediction.replace && text.startsWith(last.text)) {
       const typed = text.slice(last.text.length)
       if (typed && last.prediction.suffix.startsWith(typed) && typed.length < last.prediction.suffix.length) {
         const sticky = { ...last.prediction, suffix: last.prediction.suffix.slice(typed.length) }
         predictions.splice(0, predictions.length, sticky, ...predictions.filter((prediction) => prediction.word !== sticky.word))
       }
     }
-    this.memo = { text, offset, marks: signature, revision, predictor, predictions, index: 0 }
+    this.memo = { text, offset, marks: signature, revision, predictor, predictions, index: 0, summoned: false }
     return predictions[0]
   }
 
@@ -144,7 +145,19 @@ export class ComposerGhost {
     const y = this.editor.screenY + cursor.visualRow
     buffer.pushScissorRect(x, y, room, 1)
     try {
-      buffer.drawText(ghost, x, y, this.color(), this.editor.backgroundColor)
+      const color = this.color()
+      buffer.drawText(ghost, x, y, color, this.editor.backgroundColor)
+      const memo = this.memo!
+      if (memo.predictions.length > 1 && this.showAlternativeCounter()) {
+        const fitting = memo.predictions.filter((candidate) => this.fits(candidate))
+        if (fitting.length > 1) {
+          const counter = `  ${fitting.indexOf(prediction) + 1}/${fitting.length}`
+          const width = this.editor.editBuffer.measureText(ghost)
+          if (width + this.editor.editBuffer.measureText(counter) <= room) {
+            buffer.drawText(counter, x + width, y, dimGhostColor(color), this.editor.backgroundColor)
+          }
+        }
+      }
     } finally {
       buffer.popScissorRect()
     }
@@ -184,6 +197,25 @@ export class ComposerGhost {
 
   canCycle(): boolean {
     return this.visible() && this.memo!.predictions.some((prediction, index) => index !== this.memo!.index && this.fits(prediction))
+  }
+
+  summon(): boolean {
+    if (this.disposed || this.visible() || !eligibleComposer(this.view())) return false
+    const text = this.editor.plainText
+    const offset = this.offset()
+    const automatic = this.prediction(text, offset)
+    if (automatic && this.fits(automatic)) return false
+    const predictor = this.active()
+    const marks = this.editor.extmarks.getAll()
+    const query = completionQuery(text, offset, this.protectedRanges(marks), this.completeAtLineEnd, predictor.grammar)
+    if (!query) return false
+    const predictions = predictor.candidates(query, 5, true).filter((prediction) =>
+      (!(marks.length || offset !== text.length) || !prediction.replace) && this.fits(prediction))
+    if (!predictions.length) return false
+    this.dismissed = undefined
+    this.memo = { text, offset, marks: this.marksKey(), revision: predictor.modelRevision, predictor, predictions, index: 0, summoned: true }
+    this.editor.requestRender()
+    return true
   }
 
   cycle(direction: 1 | -1): boolean {
