@@ -1,4 +1,4 @@
-import { RGBA, type CliRenderer, type OptimizedBuffer, type Renderable, type TextareaRenderable } from "@opentui/core"
+import { RGBA, TextAttributes, type CliRenderer, type OptimizedBuffer, type Renderable, type TextareaRenderable } from "@opentui/core"
 import { completionQuery, type TextRange } from "./prose"
 import type { Prediction, WordPredictor } from "./predictor"
 
@@ -21,8 +21,6 @@ type Alternatives = {
     text: RGBA
     muted: RGBA
     background: RGBA
-    selectedText: RGBA
-    selectedBackground: RGBA
   }
 }
 
@@ -166,32 +164,36 @@ export class ComposerGhost {
     const { prefix } = this.memo!
     const prefixWidth = this.editor.editBuffer.measureText(prefix)
     const cursor = this.editor.visualCursor
-    if (cursor.visualRow !== 0 || cursor.visualCol < prefixWidth || y < fitting.length) return false
+    if (cursor.visualRow !== 0 || cursor.visualCol < prefixWidth || y < fitting.length + 2) return false
     const terms = fitting.map((candidate) => candidate.replace ? candidate.suffix : prefix + candidate.suffix)
     const measure = (text: string) => this.editor.editBuffer.measureText(text)
-    const termWidth = Math.max(...terms.map(measure)) + 3
+    const termWidth = Math.max(...terms.map(measure)) + 6
     const left = Math.max(0, this.editor.screenX)
     const right = Math.min(buffer.width, this.editor.screenX + this.editor.width)
     if (termWidth > Math.min(48, right - left)) return false
-    const start = Math.max(left, Math.min(x - prefixWidth - 2, right - termWidth))
+    const start = Math.max(left, Math.min(x - prefixWidth - 4, right - termWidth))
     const fullHelp = ["↑/↓ move", options.accept && `${options.accept} accept`, options.dismiss && `${options.dismiss} close`].filter(Boolean).join(" · ")
-    const help = y > fitting.length
-      ? [fullHelp, "↑/↓ move"].find((label) => measure(label) + 3 <= Math.min(48, right - start))
+    const help = y > fitting.length + 2
+      ? [fullHelp, "↑/↓ move"].find((label) => measure(label) + 4 <= Math.min(48, right - start))
       : undefined
-    const width = Math.max(termWidth, help ? measure(help) + 3 : 0)
-    const height = fitting.length + Number(!!help)
+    const width = Math.max(termWidth, help ? measure(help) + 4 : 0)
+    const height = fitting.length + Number(!!help) + 2
     const top = y - height
-    const { colors } = options
+    const opaque = ({ r, g, b }: RGBA) => RGBA.fromValues(r, g, b, 1)
+    const text = opaque(options.colors.text)
+    const muted = opaque(options.colors.muted)
+    const background = opaque(options.colors.background)
     buffer.pushScissorRect(start, top, width, height)
     try {
-      buffer.fillRect(start, top, width, height, colors.background)
+      buffer.drawBox({ x: start, y: top, width, height, border: true, borderStyle: "single", borderColor: muted, backgroundColor: background, shouldFill: true })
       terms.forEach((term, index) => {
         const selected = fitting[index] === prediction
-        if (selected) buffer.fillRect(start, top + index, width, 1, colors.selectedBackground)
-        buffer.drawText(`${selected ? "› " : "  "}${term}`, start, top + index,
-          selected ? colors.selectedText : colors.text, selected ? colors.selectedBackground : colors.background)
+        const label = ` ${selected ? "› " : "  "}${term}`
+        const row = label + " ".repeat(width - 2 - measure(label))
+        buffer.drawText(row, start + 1, top + index + 1,
+          selected ? background : text, selected ? text : background, selected ? TextAttributes.BOLD : undefined)
       })
-      if (help) buffer.drawText(help, start + 2, y - 1, colors.muted, colors.background)
+      if (help) buffer.drawText(help, start + 2, y - 2, muted, background)
     } finally {
       buffer.popScissorRect()
     }
@@ -231,14 +233,9 @@ export class ComposerGhost {
       buffer.drawText(ghost, x, y, color, this.editor.backgroundColor)
       if (options && !picker && (options.summon || options.cycle || memo.picker)) {
         const counter = `  ${fitting.indexOf(prediction) + 1}/${fitting.length}`
-        const hint = options.summon && (!attempted || !options.cycle)
-          ? `  ${options.summon} ${attempted ? "cycles" : "for"} ${fitting.length} choices`
-          : counter
         const width = this.editor.editBuffer.measureText(ghost)
-        for (const label of hint === counter ? [counter] : [hint, counter]) {
-          if (width + this.editor.editBuffer.measureText(label) > room) continue
-          buffer.drawText(label, x + width, y, dimGhostColor(color), this.editor.backgroundColor)
-          break
+        if (width + this.editor.editBuffer.measureText(counter) <= room) {
+          buffer.drawText(counter, x + width, y, dimGhostColor(color), this.editor.backgroundColor)
         }
       }
     } finally {

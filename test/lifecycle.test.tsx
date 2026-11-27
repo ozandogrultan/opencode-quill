@@ -62,7 +62,7 @@ test("mounted footer slots switch route ghosts, dispose on unmount, and release 
     await frame()
     expect(enabled(), "home suggestion").toBe(true)
     expect(home.plainText).toBe("please comp")
-    expect(testing.captureCharFrame()).toContain("⌃Y for 2 choices")
+    expect(testing.captureCharFrame()).toContain("please complete  1/2")
     expect(summon().bind).toBeUndefined()
     expect(down().run()).toBe(false)
     expect(summon().run()).toBeUndefined()
