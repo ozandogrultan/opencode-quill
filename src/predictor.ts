@@ -333,7 +333,7 @@ export class WordPredictor {
     return resolved
   }
 
-  candidates(query: CompletionQuery, limit = 5): Prediction[] {
+  candidates(query: CompletionQuery, limit = 5, summoned = false): Prediction[] {
     const maximum = Number.isFinite(limit) ? Math.max(0, Math.min(5, Math.floor(limit))) : 5
     if (!maximum) return []
     const prefix = this.grammar.normalize(query.prefix)
@@ -388,7 +388,7 @@ export class WordPredictor {
         const gate = query.next
           ? bestScore >= CONFIDENCE
           : confidence! >= threshold || (exactConfident && bestScore >= EXACT_RATIO * exact)
-        if (!bestScore || confidence === undefined || (bestWeight === 1 && !gate)) {
+        if (!bestScore || confidence === undefined || (bestWeight === 1 && !gate && !summoned)) {
           if (!predictions.length) return []
           continue
         }

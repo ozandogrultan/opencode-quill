@@ -99,3 +99,17 @@ test("uses raw code-point lengths and complete UTF-16 prefixes", () => {
     positions: 3, wordChars: 4, wrongShown: 0, wordsTop1: 1, wordsTop5: 1, prefixSaved: 2,
   })
 })
+
+test("alternative replay charges for cycling and accepting", () => {
+  withTemp((directory) => {
+    const path = join(directory, "prompts.json")
+    const prompts = ["run testing", "run testing", "run tracking", "run tracking", "run tracking"]
+    writeFileSync(path, JSON.stringify(prompts.map((text, id) => ({ text, id: String(id) }))))
+    const execution = run("--prompts", path, "--alternatives", "--json")
+    expect(execution.exitCode).toBe(0)
+    expect(JSON.parse(execution.stdout.toString()).prose.alternatives).toEqual({
+      wordsTop3: 2, wordsTop3WithSummon: 2, automaticSaved: 5, cycleSaved: 6,
+      netSaved: 6, cyclePresses: 1, summonPresses: 0, acceptPresses: 1,
+    })
+  })
+})

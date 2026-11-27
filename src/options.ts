@@ -1,4 +1,4 @@
-export type Options = { enabled: boolean; completeAtLineEnd: boolean; completeShell: boolean; minSuggestedWordLength: number; acceptKeys: string[]; dismissKeys: string[]; cycleNextKeys: string[]; cyclePreviousKeys: string[] }
+export type Options = { enabled: boolean; completeAtLineEnd: boolean; completeShell: boolean; minSuggestedWordLength: number; acceptKeys: string[]; dismissKeys: string[]; cycleNextKeys: string[]; cyclePreviousKeys: string[]; summonKeys: string[] }
 
 function keys(value: unknown, fallback: string[], name: string): string[] {
   if (value === undefined) return fallback
@@ -22,6 +22,7 @@ export function resolveOptions(input: Readonly<Record<string, unknown>>): Option
     dismissKeys: keys(input.dismissKeys, ["escape"], "dismissKeys"),
     cycleNextKeys: keys(input.cycleNextKeys, [], "cycleNextKeys"),
     cyclePreviousKeys: keys(input.cyclePreviousKeys, [], "cyclePreviousKeys"),
+    summonKeys: keys(input.summonKeys, [], "summonKeys"),
   }
 }
 

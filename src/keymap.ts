@@ -1,7 +1,7 @@
 import type { KeymapLayer } from "@opencode/plugin/tui/context"
 import type { Options } from "./options"
 
-type Suggestion = { visible(): boolean; accept(): boolean; dismiss(): boolean; canCycle(): boolean; cycle(direction: 1 | -1): boolean }
+type Suggestion = { visible(): boolean; accept(): boolean; dismiss(): boolean; canCycle(): boolean; cycle(direction: 1 | -1): boolean; summon(): boolean }
 
 export function completionLayer(options: Options, suggestion: () => Suggestion | undefined): KeymapLayer {
   return {
@@ -29,6 +29,12 @@ export function completionLayer(options: Options, suggestion: () => Suggestion |
         enabled: () => suggestion()?.canCycle() === true,
         run: () => suggestion()?.cycle(direction) ? undefined : false,
       })),
+      {
+        id: "quill.summon",
+        title: "Summon word suggestions",
+        bind: options.summonKeys.length ? options.summonKeys.join(",") : false,
+        run: () => suggestion()?.summon() ? undefined : false,
+      },
     ],
   }
 }

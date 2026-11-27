@@ -14,7 +14,7 @@ README.md is the user-facing contract — read it before changing behavior.
 - `src/ghost.ts` — OpenTUI buffer painting, cursor tracking, eligibility checks, and insertion.
 - `src/options.ts` — option parsing and validation.
 - `src/keymap.ts` — reactive keymap layer construction for accept and dismiss actions.
-- `scripts/eval.ts` — `bun run eval`: replays your OpenCode history (read-only DB) through the predictor on a time split and prints aggregate metrics. `--split val|test`, `--json`, `--db <path>`, `--prompts <file>` (frozen benchmark), `--freeze <file>` (write one, owner-only, keep outside the repo), `--examples`.
+- `scripts/eval.ts` — `bun run eval`: replays your OpenCode history (read-only DB) through the predictor on a time split and prints aggregate metrics. `--split val|test`, `--json`, `--db <path>`, `--prompts <file>` (frozen benchmark), `--freeze <file>` (write one, owner-only, keep outside the repo), `--examples`, `--alternatives` (coverage and net keystrokes for cycling and summoning).
 - `test/` — Bun unit and installer tests.
 - `bunfig.toml` — preloads the OpenTUI Solid transform for tests.
 - `install.sh` — copies sources and registers a directory in global `cli.json`.
@@ -58,7 +58,7 @@ bun run eval
 - Register local TUI plugin directories in `cli.json`, not individual files.
 - Suggestions must not enter the text buffer until explicitly accepted.
 - Acceptance inserts or replaces the active word and never submits, overwrites unrelated draft text, or uses the clipboard.
-- Capture keys only with a visible suggestion in the focused normal composer.
+- Capture keys only in the focused normal composer. Acceptance, dismissal, and cycling require a visible suggestion; explicit summon requires an eligible draft and a fitting candidate.
 - Preserve host handlers, hints, selections, attachments, undo state, and other plugins.
 - Ghost owns empty-composer next-prompt suggestions; Quill targets non-empty prose drafts.
 - Ghost text dim level must match Ghost (dimmed muted theme text; see `dimGhostColor` in `src/ghost.ts`).

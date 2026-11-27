@@ -71,7 +71,8 @@ export default Plugin.define({
           selected: context.renderer.hasSelection,
           enabled: !disposed && settings.enabled && (!shell || shellEnabled()) && currentEditor() === editor,
         }
-      }, () => dimGhostColor(context.theme.text.muted), context.renderer, options.completeAtLineEnd, shellPredictor)
+      }, () => dimGhostColor(context.theme.text.muted), context.renderer, options.completeAtLineEnd, shellPredictor,
+      () => ["quill.next", "quill.previous"].some((id) => context.keymap.shortcuts(id).length > 0))
     }
 
     const sessionInfo = (sessionID: string) =>
