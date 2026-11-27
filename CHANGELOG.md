@@ -4,6 +4,12 @@ All notable changes are documented in this file using
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-11-27
+
+### Added
+
+- **predictor:** Reduce wrong suggestions and offer longer words after a complete word (#30)
+
 ## [0.7.1] - 2026-11-23
 
 ### Fixed
@@ -169,6 +175,7 @@ All notable changes are documented in this file using
 - `/quill` command and command palette action to toggle autocomplete.
 - Local installer script, full test suite, CI workflows, and release tooling.
 
+[0.8.0]: https://github.com/ozandogrultan/opencode-quill/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/ozandogrultan/opencode-quill/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/ozandogrultan/opencode-quill/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/ozandogrultan/opencode-quill/compare/v0.6.3...v0.6.4
