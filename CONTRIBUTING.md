@@ -28,8 +28,11 @@ bun run lint:sh      # bash -n on every script
 CI runs the same checks plus ShellCheck on the scripts.
 
 For changes to prediction, `bun run eval` measures quality on your local
-OpenCode history and never writes prompt data. Compare before and after on the
-default test split and tune only against `--split val`.
+OpenCode history. Compare before and after on the default test split and tune
+only against `--split val`. Pruning sessions shrinks that history, so freeze a
+benchmark once with `bun run eval --freeze <file>` and compare against it with
+`--prompts <file>`. The frozen file holds raw prompt text: keep it outside the
+repository; it is written with owner-only permissions.
 
 ## Guidelines
 

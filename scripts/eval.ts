@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite"
+import { chmodSync } from "node:fs"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, relative, resolve } from "node:path"
 import frequencies from "subtlex-word-frequencies"
 import { completionQuery, proseGrammar, type Grammar } from "../src/prose"
 import { PersonalModel, WordPredictor } from "../src/predictor"
@@ -15,21 +16,44 @@ const value = (name: string) => {
 const split = value("--split") ?? "test"
 if (split !== "val" && split !== "test") throw new Error("--split must be val or test")
 const dbPath = value("--db") ?? join(homedir(), ".local/share/opencode/opencode.db")
+const promptsPath = value("--prompts")
+const freezePath = value("--freeze")
 
 type Prompt = { id: string; text: string }
+type Corpus = { prose: Prompt[]; shell: Prompt[] }
 
-function load(type: "user" | "shell"): Prompt[] {
+const usable = (row: any): row is Prompt =>
+  typeof row?.id === "string" && typeof row.text === "string" && !!row.text.trim() && row.text.length <= 4000 && row.text.split("\n").length <= 12
+
+function fromDatabase(): Corpus {
   const db = new Database(dbPath, { readonly: true })
   try {
-    const field = type === "user" ? "$.text" : "$.command"
-    return db.query(
+    const rows = (type: string, field: string) => db.query(
       "SELECT m.id AS id, json_extract(m.data, ?) AS text FROM session_message m JOIN session_v2 s ON s.id = m.session_id " +
       "WHERE m.type = ? AND s.parent_id IS NULL ORDER BY m.time_created, m.id",
-    ).all(field, type).filter((row: any) => typeof row.text === "string" && row.text.trim() && row.text.length <= 4000 && row.text.split("\n").length <= 12) as Prompt[]
+    ).all(field, type) as Prompt[]
+    return { prose: rows("user", "$.text"), shell: rows("shell", "$.command") }
   } finally {
     db.close()
   }
 }
+
+async function fromFile(path: string): Promise<Corpus> {
+  const data = await Bun.file(path).json()
+  return Array.isArray(data) ? { prose: data, shell: [] } : { prose: data.prose ?? [], shell: data.shell ?? [] }
+}
+
+if (freezePath) {
+  if (!relative(resolve(import.meta.dir, ".."), resolve(freezePath)).startsWith("..")) throw new Error("--freeze must write outside the repository")
+  const corpus = fromDatabase()
+  await Bun.write(freezePath, JSON.stringify(corpus))
+  chmodSync(freezePath, 0o600)
+  console.log(`froze ${corpus.prose.length} prompts and ${corpus.shell.length} shell commands to ${freezePath}`)
+  process.exit(0)
+}
+
+const raw = promptsPath ? await fromFile(promptsPath) : fromDatabase()
+const corpus = { prose: raw.prose.filter(usable), shell: raw.shell.filter(usable) }
 
 function partition(prompts: Prompt[]) {
   const trainEnd = Math.floor(prompts.length * 0.64)
@@ -112,13 +136,15 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
 const examples = flag("--examples")
 const result = {
   split,
-  prose: evaluate(proseGrammar, load("user"), examples),
-  shell: evaluate(shellGrammar, load("shell"), examples),
+  source: promptsPath ?? dbPath,
+  prose: evaluate(proseGrammar, corpus.prose, examples),
+  shell: evaluate(shellGrammar, corpus.shell, examples),
 }
 
 if (flag("--json")) {
   console.log(JSON.stringify(result))
 } else {
+  console.log(`source: ${result.source}`)
   console.log(`split: ${split} (train on the oldest ${split === "val" ? 64 : 80}%, report on the next ${split === "val" ? 16 : 20}%)`)
   console.log("chars saved: prefix = word length - prefix typed - 1 at the first prefix whose top-1 is right; next-word = word length - 1 when top-1 is right")
   for (const name of ["prose", "shell"] as const) {
