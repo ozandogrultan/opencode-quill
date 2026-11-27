@@ -337,6 +337,7 @@ export class WordPredictor {
     const maximum = Number.isFinite(limit) ? Math.max(0, Math.min(5, Math.floor(limit))) : 5
     if (!maximum) return []
     const prefix = this.grammar.normalize(query.prefix)
+    const prefixLength = [...prefix].length
     const words = query.words ?? (this.grammar.prose ? proseWords(query.before) : [])
     const local = new Map<string, number>()
     for (const word of words) increment(local, word.text)
@@ -345,7 +346,7 @@ export class WordPredictor {
     const pair = context.length === 2 ? context.join("\0") : undefined
     const evidence = this.bigramTotals.get(previous ?? "")?.total ?? 0
     if (query.next && evidence < 2) return []
-    if (!query.next && [...prefix].length < 2 && evidence < 2) return []
+    if (!query.next && prefixLength < 2 && evidence < 2) return []
     const slash = prefix.includes("/")
     const followed = (word: string) => (previous ? this.personal.bigrams.get(`${previous}\0${word}`) ?? 0 : 0) >= 2 ||
       (pair ? this.personal.trigrams.get(`${pair}\0${word}`) ?? 0 : 0) >= 2
@@ -376,8 +377,9 @@ export class WordPredictor {
       }
       const predictions: Prediction[] = []
       const exact = query.next ? 0 : ranked.find(({ word }) => word === prefix)?.score ?? 0
-      const short = [...prefix].length < 2
-      const threshold = this.grammar.prose && short ? SHORT_CONFIDENCE : CONFIDENCE
+      const short = prefixLength < 2
+      const cautiousPrefix = short || (prefixLength === 2 && evidence < 2)
+      const threshold = this.grammar.prose && cautiousPrefix ? SHORT_CONFIDENCE : CONFIDENCE
       const exactConfident = this.grammar.prose && !short && exact >= threshold * (sum || 1)
       for (const { word: best, score: bestScore, weight: bestWeight } of ranked) {
         if (best === prefix && !query.next) {

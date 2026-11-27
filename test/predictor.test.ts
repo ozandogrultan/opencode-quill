@@ -754,3 +754,16 @@ test("an apostrophe ends a word prefix before hyphens and slashes", () => {
   expect(completionQuery("don'-", 5)).toBeUndefined()
   expect(completionQuery("don'/x", 6)).toBeUndefined()
 })
+test("two-letter prose suggestions need more confidence without learned context", () => {
+  const predictor = new WordPredictor([
+    { word: "the", count: 35 },
+    { word: "then", count: 25 },
+    { word: "these", count: 25 },
+    { word: "that", count: 15 },
+  ])
+  expect(predictor.candidates({ before: "", prefix: "th", next: false })).toEqual([])
+  const model = new PersonalModel()
+  model.observe([{ id: "1", text: "and then" }, { id: "2", text: "and then" }])
+  predictor.setPersonal(model.snapshot())
+  expect(predictor.candidates({ before: "and ", prefix: "th", next: false })[0]?.word).toBe("then")
+})
