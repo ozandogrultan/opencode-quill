@@ -1,7 +1,7 @@
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { BoxRenderable, InputRenderable, RGBA, TextareaRenderable } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
-import { ComposerGhost, dimGhostColor, eligibleComposer, findComposer, type Composer } from "../src/ghost"
+import { ComposerGhost, dimGhostColor, eligibleComposer, findComposer, opaqueBackground, type Composer } from "../src/ghost"
 import { completionLayer } from "../src/keymap"
 import { resolveOptions } from "../src/options"
 import { PersonalModel, WordPredictor } from "../src/predictor"
@@ -817,4 +817,23 @@ test("sticky continuation keeps the shown word first without duplicating it in t
   expect(ghost.cycle(1)).toBe(true)
   await testing.renderOnce()
   expect(testing.captureCharFrame()).toContain("please complete")
+})
+
+test("picker background stays opaque on transparent and light themes", () => {
+  const dark = RGBA.fromHex("#222222")
+  const lightText = RGBA.fromHex("#eeeeee")
+  const darkText = RGBA.fromHex("#222222")
+  const light = RGBA.fromHex("#fafafa")
+  const none = RGBA.fromValues(0, 0, 0, 0)
+  expect(opaqueBackground([dark, light], lightText)).toEqual(dark)
+  expect(opaqueBackground([none, light], darkText)).toEqual(light)
+  const transparentOnDark = opaqueBackground([none, none], lightText)
+  const transparentOnLight = opaqueBackground([none, none], darkText)
+  expect(transparentOnDark.a).toBe(1)
+  expect(transparentOnLight.a).toBe(1)
+  expect(transparentOnDark.r).toBeLessThan(0.2)
+  expect(transparentOnLight.r).toBeGreaterThan(0.9)
+  const translucent = opaqueBackground([RGBA.fromValues(0.5, 0.5, 0.5, 0.5)], darkText)
+  expect(translucent.a).toBe(1)
+  expect(translucent.r).toBeGreaterThan(0.5)
 })

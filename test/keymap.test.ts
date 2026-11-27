@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { completionLayer } from "../src/keymap"
+import { completionLayer, displayShortcut } from "../src/keymap"
 import { parseQuillCommand, resolveOptions } from "../src/options"
 
 test("custom keys replace defaults and are passed to the host keymap", () => {
@@ -114,4 +114,16 @@ test("parses quill slash commands into toggle, explicit enable, and clear", () =
   expect(parseQuillCommand("clear casing")).toEqual({ type: "casing" })
   expect(parseQuillCommand("RESET CASING")).toEqual({ type: "casing" })
   expect(parseQuillCommand("unknown")).toEqual({ type: "invalid" })
+})
+
+test("command ids stay stable so OpenCode keybinds can override them", () => {
+  const layer = completionLayer(resolveOptions({ summonKeys: ["ctrl+y"] }), () => undefined)
+  expect(layer.commands!.filter((command) => command.id).map((command) => command.id)).toEqual(["quill.accept", "quill.dismiss", "quill.next", "quill.previous", "quill.summon"])
+})
+
+test("hints show the first displayable shortcut and skip control characters", () => {
+  expect(displayShortcut(["\u001b", " ", "\u007f", " Tab "])).toBe("Tab")
+  expect(displayShortcut(["⌃Y", "Tab"])).toBe("⌃Y")
+  expect(displayShortcut(["\t", "\u009b"])).toBeUndefined()
+  expect(displayShortcut([])).toBeUndefined()
 })

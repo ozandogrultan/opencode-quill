@@ -47,6 +47,17 @@ export function dimGhostColor(muted: RGBA): RGBA {
   return RGBA.fromValues(muted.r, muted.g, muted.b, muted.a * 0.55)
 }
 
+export function opaqueBackground(backgrounds: readonly RGBA[], text: RGBA): RGBA {
+  const solid = backgrounds.find((color) => color.a >= 1)
+  if (solid) return solid
+  const light = 0.2126 * text.r + 0.7152 * text.g + 0.0722 * text.b < 0.5
+  const base = light ? 0.96 : 0.09
+  const translucent = backgrounds.find((color) => color.a > 0)
+  const alpha = translucent?.a ?? 0
+  const mix = (channel: number | undefined) => (channel ?? base) * alpha + base * (1 - alpha)
+  return RGBA.fromValues(mix(translucent?.r), mix(translucent?.g), mix(translucent?.b), 1)
+}
+
 export function eligibleComposer(view: Composer, text?: string): boolean {
   const editor = view.editor
   return view.enabled && view.normal && view.mode === "base" && !view.selected &&

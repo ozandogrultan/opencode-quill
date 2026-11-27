@@ -5,8 +5,8 @@ import { createEffect, createRoot, createSignal, onCleanup, untrack } from "soli
 import { unwrap } from "solid-js/store"
 import frequencies from "subtlex-word-frequencies"
 import { proseGrammar, type Grammar } from "./prose"
-import { ComposerGhost, dimGhostColor, findComposer } from "./ghost"
-import { completionLayer } from "./keymap"
+import { ComposerGhost, dimGhostColor, findComposer, opaqueBackground } from "./ghost"
+import { completionLayer, displayShortcut } from "./keymap"
 import { parseQuillCommand, resolveOptions } from "./options"
 import { emptySnapshot, PersonalModel, WordPredictor } from "./predictor"
 import { shellGrammar } from "./shell"
@@ -72,7 +72,7 @@ export default Plugin.define({
           enabled: !disposed && settings.enabled && (!shell || shellEnabled()) && currentEditor() === editor,
         }
       }, () => dimGhostColor(context.theme.text.muted), context.renderer, options.completeAtLineEnd, shellPredictor, () => {
-        const shortcut = (id: string) => context.keymap.shortcuts(id).map((key) => key.trim()).find((key) => key && !/[\u0000-\u001f\u007f-\u009f]/u.test(key))
+        const shortcut = (id: string) => displayShortcut(context.keymap.shortcuts(id))
         const { text, background } = context.theme
         return {
           summon: shortcut("quill.summon"),
@@ -82,7 +82,7 @@ export default Plugin.define({
           colors: {
             text: text.base,
             muted: text.muted,
-            background: background.raised.base,
+            background: opaqueBackground([background.raised.base, background.base], text.base),
           },
         }
       })
