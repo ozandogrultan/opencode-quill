@@ -6,20 +6,20 @@ test("custom keys replace defaults and are passed to the host keymap", () => {
   const options = resolveOptions({ acceptKeys: ["ctrl+y", "<leader>a"], dismissKeys: ["ctrl+g"] })
   const layer = completionLayer(options, () => undefined)
   expect(layer.mode).toBe("base")
-  expect(layer.commands?.map((command) => command.bind)).toEqual(["ctrl+y,<leader>a", "ctrl+g", false, false, false])
+  expect(layer.commands?.filter((command) => command.id).map((command) => command.bind)).toEqual(["ctrl+y,<leader>a", "ctrl+g", undefined, undefined, undefined])
 })
 
-test("empty key lists disable bindings instead of restoring defaults", () => {
+test("empty key lists disable default bindings but leave alternatives configurable by the host", () => {
   const layer = completionLayer(resolveOptions({ acceptKeys: [], dismissKeys: [], cycleNextKeys: [], cyclePreviousKeys: [] }), () => undefined)
-  expect(layer.commands?.map((command) => command.bind)).toEqual([false, false, false, false, false])
+  expect(layer.commands?.filter((command) => command.id).map((command) => command.bind)).toEqual([false, false, undefined, undefined, undefined])
 })
 
 test("commands fall through without an eligible suggestion", () => {
   let visible = false
   let eligible = false
-  const suggestion = { visible: () => visible, accept: () => eligible, dismiss: () => eligible, canCycle: () => visible, cycle: () => eligible, summon: () => eligible }
+  const suggestion = { visible: () => visible, accept: () => eligible, dismiss: () => eligible, canCycle: () => visible, cycle: () => eligible, summon: () => eligible, pickerVisible: () => false }
   const layer = completionLayer(resolveOptions({}), () => suggestion)
-  for (const command of layer.commands!.filter((command) => command.id !== "quill.summon")) {
+  for (const command of layer.commands!.filter((command) => command.id && command.id !== "quill.summon")) {
     expect((command.enabled as () => boolean)()).toBe(false)
     expect(command.run()).toBe(false)
     visible = true
@@ -52,7 +52,7 @@ test("minimum word length accepts non-negative integers and rejects invalid valu
 
 test("custom cycle keys preserve direction", () => {
   const directions: number[] = []
-  const suggestion = { visible: () => true, accept: () => true, dismiss: () => true, canCycle: () => true, cycle: (direction: 1 | -1) => { directions.push(direction); return true }, summon: () => false }
+  const suggestion = { visible: () => true, accept: () => true, dismiss: () => true, canCycle: () => true, cycle: (direction: 1 | -1) => { directions.push(direction); return true }, summon: () => false, pickerVisible: () => false }
   const layer = completionLayer(resolveOptions({ cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+p"] }), () => suggestion)
   for (const [id, binding] of [["quill.next", "alt+n"], ["quill.previous", "alt+p"]]) {
     const command = layer.commands!.find((command) => command.id === id)!
@@ -65,13 +65,33 @@ test("custom cycle keys preserve direction", () => {
 
 test("summon is opt-in and falls through when it cannot show a suggestion", () => {
   let available = false
-  const suggestion = { visible: () => false, accept: () => false, dismiss: () => false, canCycle: () => false, cycle: () => false, summon: () => available }
+  const suggestion = { visible: () => false, accept: () => false, dismiss: () => false, canCycle: () => false, cycle: () => false, summon: () => available, pickerVisible: () => false }
   const layer = completionLayer(resolveOptions({ summonKeys: ["ctrl+space"] }), () => suggestion)
   const summon = layer.commands!.find((command) => command.id === "quill.summon")!
   expect(summon.bind).toBe("ctrl+space")
   expect(summon.run()).toBe(false)
   available = true
   expect(summon.run()).toBeUndefined()
+})
+
+test("arrows only run when the picker is painted, even without plugin key options, and never bind Enter", () => {
+  let picker = false
+  const directions: number[] = []
+  const suggestion = { visible: () => true, accept: () => true, dismiss: () => true, canCycle: () => true, cycle: (direction: 1 | -1) => { directions.push(direction); return true }, summon: () => true, pickerVisible: () => picker }
+  const commands = completionLayer(resolveOptions({}), () => suggestion).commands!
+  const arrows = commands.filter((command) => !command.id)
+  expect(arrows.map((command) => command.bind)).toEqual(["down", "up"])
+  expect(commands.some((command) => command.bind === "enter" || command.bind === "return")).toBe(false)
+  for (const arrow of arrows) {
+    expect((arrow.enabled as () => boolean)()).toBe(false)
+    expect(arrow.run()).toBe(false)
+  }
+  picker = true
+  for (const arrow of arrows) {
+    expect((arrow.enabled as () => boolean)()).toBe(true)
+    expect(arrow.run()).toBeUndefined()
+  }
+  expect(directions).toEqual([1, -1])
 })
 
 test("parses quill slash commands into toggle, explicit enable, and clear", () => {

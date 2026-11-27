@@ -2,16 +2,26 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import { BoxRenderable, InputRenderable, RGBA, TextareaRenderable } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { ComposerGhost, dimGhostColor, eligibleComposer, findComposer, type Composer } from "../src/ghost"
+import { completionLayer } from "../src/keymap"
+import { resolveOptions } from "../src/options"
 import { PersonalModel, WordPredictor } from "../src/predictor"
 import { proseGrammar } from "../src/prose"
 
 const cleanups: (() => void)[] = []
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup() })
 
-async function setup(text = "please comp", width = 60, completeAtLineEnd = false, showAlternativeCounter = () => false) {
+const pickerColors = {
+  text: RGBA.fromHex("#ffffff"),
+  muted: RGBA.fromHex("#aaaaaa"),
+  background: RGBA.fromHex("#222222"),
+  selectedText: RGBA.fromHex("#000000"),
+  selectedBackground: RGBA.fromHex("#eeeeee"),
+}
+
+async function setup(text = "please comp", width = 60, completeAtLineEnd = false, cycle = () => false, top = 1, summon?: string) {
   const testing = await createTestRenderer({ width, height: 8 })
   cleanups.push(() => testing.renderer.destroy())
-  const parent = new BoxRenderable(testing.renderer, { id: "composer", width, height: 4, paddingLeft: 2, paddingTop: 1 })
+  const parent = new BoxRenderable(testing.renderer, { id: "composer", width, height: top + 3, paddingLeft: 2, paddingTop: top })
   const editor = new TextareaRenderable(testing.renderer, { id: "input", width: "100%", height: 2, wrapMode: "word" })
   parent.add(editor)
   testing.renderer.root.add(parent)
@@ -20,7 +30,8 @@ async function setup(text = "please comp", width = 60, completeAtLineEnd = false
   editor.focus()
   const view: Composer = { editor, normal: true, focused: editor, mode: "base", selected: false, enabled: true }
   const predictor = new WordPredictor([{ word: "complete", count: 10 }, { word: "réviser", count: 10 }])
-  const ghost = new ComposerGhost(editor, predictor, () => view, () => RGBA.fromHex("#888888"), testing.renderer, completeAtLineEnd, undefined, showAlternativeCounter)
+  const ghost = new ComposerGhost(editor, predictor, () => view, () => RGBA.fromHex("#888888"), testing.renderer, completeAtLineEnd, undefined,
+    () => ({ cycle: cycle(), summon, accept: "Tab", dismiss: "Esc", colors: pickerColors }))
   cleanups.push(() => ghost.dispose())
   await testing.renderOnce()
   return { ...testing, editor, ghost, view, predictor }
@@ -197,19 +208,20 @@ test.each([13, 14, 16])("line-end ghost never overwrites the next logical line w
 })
 
 test("cycles confident alternatives without editing, wraps, and accepts with native undo", async () => {
-  let showAlternativeCounter = false
-  const fixture = await setup("please comp", 60, false, () => showAlternativeCounter)
+  let cycle = false
+  const fixture = await setup("please comp", 60, false, () => cycle)
   const model = new PersonalModel()
   model.observe(Array.from({ length: 10 }, (_, index) => ({ id: String(index), text: index < 6 ? "please complete" : "please compare" })))
   fixture.predictor.setPersonal(model.snapshot())
   await fixture.renderOnce()
   expect(fixture.captureCharFrame()).toContain("please complete")
   expect(fixture.captureCharFrame()).not.toContain("1/2")
-  showAlternativeCounter = true
+  cycle = true
   await fixture.renderOnce()
   expect(fixture.captureCharFrame()).toContain("please complete  1/2")
   expect(fixture.ghost.cycle(1)).toBe(true)
   expect(fixture.editor.plainText).toBe("please comp")
+  expect(fixture.ghost.accept()).toBe(false)
   await fixture.renderOnce()
   expect(fixture.captureCharFrame()).toContain("please compare  2/2")
   expect(fixture.ghost.cycle(1)).toBe(true)
@@ -251,7 +263,7 @@ test.each(["draft end", "line end", "attachment"])("preserves a legal append whe
 })
 
 test("summon shows low-confidence alternatives for the current draft only", async () => {
-  const fixture = await setup("please lo", 60, false, () => true)
+  const fixture = await setup("please lo", 60, false, () => false, 6, "Ctrl+Y")
   const model = new PersonalModel()
   model.observe(["local", "locally", "location", "locus", "lock", "locker"].flatMap((word) =>
     [1, 2].map((number) => ({ id: `${word}:${number}`, text: word }))))
@@ -263,12 +275,179 @@ test("summon shows low-confidence alternatives for the current draft only", asyn
   fixture.view.selected = false
   expect(fixture.ghost.summon()).toBe(true)
   await fixture.renderOnce()
-  expect(fixture.captureCharFrame()).toMatch(/please lo\w+ +1\/5/)
-  expect(fixture.ghost.summon()).toBe(false)
+  expect(fixture.captureCharFrame()).toMatch(/› lo\w+/)
+  expect(fixture.captureCharFrame()).toMatch(/please lo\w+/)
+  expect(fixture.ghost.pickerVisible()).toBe(true)
   fixture.editor.insertText("x")
+  expect(fixture.ghost.pickerVisible()).toBe(false)
   await fixture.renderOnce()
   expect(fixture.ghost.visible()).toBe(false)
   expect(fixture.editor.plainText).toBe("please lox")
+})
+
+test("a single explicitly summoned next word stays inline", async () => {
+  const fixture = await setup("please ", 60, false, () => false, 4, "Ctrl+Y")
+  spyOn(fixture.predictor, "candidates").mockImplementation((_query, _limit, summoned) =>
+    summoned ? [{ word: "try", suffix: "Try", confidence: 0.1 }] : [])
+  fixture.ghost.invalidate()
+  await fixture.renderOnce()
+  expect(fixture.ghost.visible()).toBe(false)
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please Try")
+  expect(fixture.captureCharFrame()).not.toContain("choices")
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect(fixture.ghost.summon()).toBe(false)
+})
+
+test("summon uses the reported shortcut and draws the selected terms above the typed prefix", async () => {
+  const fixture = await setup("漢字 CoMp", 60, false, () => false, 4, "Ctrl+Y")
+  const candidates = spyOn(fixture.predictor, "candidates").mockReturnValue([
+    { word: "complete", suffix: "lete", confidence: 0.6 },
+    { word: "compare", suffix: "Compare", confidence: 0.4, replace: 4 },
+  ])
+  fixture.ghost.invalidate()
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("漢字 CoMplete  Ctrl+Y for 2 choices")
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect(fixture.ghost.summon()).toBe(true)
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  await fixture.renderOnce()
+  const rows = fixture.captureCharFrame().split("\n")
+  expect(rows.slice(1, 4).map((row) => row.trimEnd())).toEqual([
+    "     › CoMplete",
+    "       Compare",
+    "       ↑/↓ move · Tab accept · Esc close",
+  ])
+  expect(rows[4]).toContain("漢字 CoMplete")
+  const highlighted = fixture.captureSpans().lines[1].spans.find((span) => span.text.includes("CoMplete"))
+  const unselected = fixture.captureSpans().lines[2].spans.find((span) => span.text.includes("Compare"))
+  expect(highlighted?.fg).toEqual(pickerColors.selectedText)
+  expect(highlighted?.bg).toEqual(pickerColors.selectedBackground)
+  expect(unselected?.bg).toEqual(pickerColors.background)
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  expect(fixture.ghost.cycle(1)).toBe(true)
+  expect(fixture.ghost.cycle(1)).toBe(true)
+  expect(fixture.ghost.cycle(-1)).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("› Compare")
+  expect(fixture.captureCharFrame()).toContain("漢字 CoMp → Compare")
+  expect(fixture.ghost.cycle(-1)).toBe(true)
+  expect(fixture.ghost.accept()).toBe(true)
+  expect(fixture.editor.plainText).toBe("漢字 CoMplete")
+  expect(candidates).toHaveBeenCalledTimes(1)
+})
+
+test("picker Escape closes the list without editing or discarding the inline suggestion", async () => {
+  const fixture = await setup("please comp", 60, false, () => true, 4, "Ctrl+Y")
+  const model = new PersonalModel()
+  model.observe(["please complete", "please compare"].flatMap((text) =>
+    [1, 2].map((index) => ({ id: `${text}:${index}`, text }))))
+  fixture.predictor.setPersonal(model.snapshot())
+  await fixture.renderOnce()
+  expect(fixture.ghost.cycle(1)).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  expect(fixture.ghost.dismiss()).toBe(true)
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).not.toContain("›")
+  expect(fixture.captureCharFrame()).toContain("Ctrl+Y for 2 choices")
+  expect(fixture.ghost.visible()).toBe(true)
+  expect(fixture.editor.plainText).toBe("please comp")
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  fixture.view.selected = true
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  await fixture.renderOnce()
+  fixture.view.selected = false
+  await fixture.renderOnce()
+  expect(fixture.ghost.visible()).toBe(true)
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+})
+
+test("moving back to a painted picker cannot revive it after summon replaced the memo without rendering", async () => {
+  const fixture = await setup("please comp", 60, false, () => false, 4, "Ctrl+Y")
+  const model = new PersonalModel()
+  model.observe(["please complete", "please compare"].flatMap((text) =>
+    [1, 2].map((index) => ({ id: `${text}:${index}`, text }))))
+  fixture.predictor.setPersonal(model.snapshot())
+  await fixture.renderOnce()
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  fixture.editor.moveCursorLeft()
+  expect(fixture.ghost.summon()).toBe(false)
+  fixture.editor.moveCursorRight()
+  expect(fixture.ghost.accept()).toBe(false)
+  expect(fixture.ghost.visible()).toBe(false)
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect(fixture.ghost.cycle(1)).toBe(false)
+  expect(fixture.ghost.dismiss()).toBe(false)
+  expect(fixture.editor.plainText).toBe("please comp")
+})
+
+test("summon alone cycles inline after the first attempt cannot draw a picker", async () => {
+  const fixture = await setup("please comp", 60, false, () => false, 1, "Ctrl+Y")
+  const model = new PersonalModel()
+  model.observe(Array.from({ length: 10 }, (_, index) => ({ id: String(index), text: index < 6 ? "please complete" : "please compare" })))
+  fixture.predictor.setPersonal(model.snapshot())
+  const down = completionLayer(resolveOptions({}), () => fixture.ghost).commands!.find((command) => command.bind === "down")!
+  await fixture.renderOnce()
+  expect(fixture.ghost.summon()).toBe(true)
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please complete  Ctrl+Y cycles 2 choices")
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect((down.enabled as () => boolean)()).toBe(false)
+  expect(down.run()).toBe(false)
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please compare  Ctrl+Y cycles 2 choices")
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toContain("please complete")
+  expect(fixture.editor.plainText).toBe("please comp")
+})
+
+test("picker falls back to a counter rather than overwriting a previous draft row", async () => {
+  const fixture = await setup("prior draft line\nplease comp", 22, false, () => true, 4, "Ctrl+Y")
+  const model = new PersonalModel()
+  model.observe(["please complete", "please compare"].flatMap((text) =>
+    [1, 2].map((index) => ({ id: `${text}:${index}`, text }))))
+  fixture.predictor.setPersonal(model.snapshot())
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toMatch(/please (complete|compare)  1\/2/)
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect(fixture.captureCharFrame()).not.toContain("›")
+  expect(fixture.captureCharFrame()).toContain("prior draft line")
+  expect(fixture.ghost.cycle(1)).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.captureCharFrame()).toMatch(/please (complete|compare)  2\/2/)
+})
+
+test("resize invalidates a drawn picker before repaint and restores only the fitting inline ghost", async () => {
+  const fixture = await setup("comp", 60, false, () => false, 4, "Ctrl+Y")
+  spyOn(fixture.predictor, "candidates").mockReturnValue([
+    { word: "complete", suffix: "lete", confidence: 0.6 },
+    { word: "compare", suffix: "are", confidence: 0.4 },
+  ])
+  fixture.ghost.invalidate()
+  await fixture.renderOnce()
+  expect(fixture.ghost.summon()).toBe(true)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(true)
+  fixture.resize(11, 8)
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  await fixture.renderOnce()
+  expect(fixture.ghost.pickerVisible()).toBe(false)
+  expect(fixture.captureCharFrame()).not.toContain("›")
+  expect(fixture.captureCharFrame()).toContain("complete")
+  expect(fixture.ghost.accept()).toBe(true)
 })
 
 test("cycling falls through for a single candidate and invalidates on model or extmark changes", async () => {
