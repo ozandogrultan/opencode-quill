@@ -127,3 +127,9 @@ test("alternative replay charges for cycling and accepting", () => {
     })
   })
 })
+
+test("scores the complete-word position separately from prefix positions", () => {
+  const result = metrics("deploy locally", "deploy local")
+  expect(result).toMatchObject({ endPositions: 2, endShown: 1, endHarmless: 0, endWrong: 1 })
+  expect(metrics("deploy locally", "deploy locally")).toMatchObject({ endShown: 0, endHarmless: 0, endWrong: 0 })
+})
