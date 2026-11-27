@@ -3,6 +3,10 @@ import type { Options } from "./options"
 
 type Suggestion = { visible(): boolean; accept(): boolean; dismiss(): boolean; canCycle(): boolean; cycle(direction: 1 | -1): boolean; summon(): boolean; pickerVisible(): boolean }
 
+export function displayShortcut(shortcuts: readonly string[]): string | undefined {
+  return shortcuts.map((key) => key.trim()).find((key) => key && !/[\u0000-\u001f\u007f-\u009f]/u.test(key))
+}
+
 export function completionLayer(options: Options, suggestion: () => Suggestion | undefined): KeymapLayer {
   return {
     mode: "base",

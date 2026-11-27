@@ -47,6 +47,17 @@ export function dimGhostColor(muted: RGBA): RGBA {
   return RGBA.fromValues(muted.r, muted.g, muted.b, muted.a * 0.55)
 }
 
+export function opaqueBackground(backgrounds: readonly RGBA[], text: RGBA): RGBA {
+  const solid = backgrounds.find((color) => color.a >= 1)
+  if (solid) return solid
+  const light = 0.2126 * text.r + 0.7152 * text.g + 0.0722 * text.b < 0.5
+  const base = light ? 0.96 : 0.09
+  const translucent = backgrounds.find((color) => color.a > 0)
+  const alpha = translucent?.a ?? 0
+  const mix = (channel: number | undefined) => (channel ?? base) * alpha + base * (1 - alpha)
+  return RGBA.fromValues(mix(translucent?.r), mix(translucent?.g), mix(translucent?.b), 1)
+}
+
 export function eligibleComposer(view: Composer, text?: string): boolean {
   const editor = view.editor
   return view.enabled && view.normal && view.mode === "base" && !view.selected &&
@@ -164,7 +175,8 @@ export class ComposerGhost {
     const { prefix } = this.memo!
     const prefixWidth = this.editor.editBuffer.measureText(prefix)
     const cursor = this.editor.visualCursor
-    if (cursor.visualRow !== 0 || cursor.visualCol < prefixWidth || y < fitting.length + 2) return false
+    const anchor = this.editor.screenY
+    if (cursor.visualCol < prefixWidth || anchor < fitting.length + 2) return false
     const terms = fitting.map((candidate) => candidate.replace ? candidate.suffix : prefix + candidate.suffix)
     const measure = (text: string) => this.editor.editBuffer.measureText(text)
     const termWidth = Math.max(...terms.map(measure)) + 6
@@ -173,12 +185,12 @@ export class ComposerGhost {
     if (termWidth > Math.min(48, right - left)) return false
     const start = Math.max(left, Math.min(x - prefixWidth - 4, right - termWidth))
     const fullHelp = ["↑/↓ move", options.accept && `${options.accept} accept`, options.dismiss && `${options.dismiss} close`].filter(Boolean).join(" · ")
-    const help = y > fitting.length + 2
+    const help = anchor > fitting.length + 2
       ? [fullHelp, "↑/↓ move"].find((label) => measure(label) + 4 <= Math.min(48, right - start))
       : undefined
     const width = Math.max(termWidth, help ? measure(help) + 4 : 0)
     const height = fitting.length + Number(!!help) + 2
-    const top = y - height
+    const top = anchor - height
     const opaque = ({ r, g, b }: RGBA) => RGBA.fromValues(r, g, b, 1)
     const text = opaque(options.colors.text)
     const muted = opaque(options.colors.muted)
@@ -193,7 +205,7 @@ export class ComposerGhost {
         buffer.drawText(row, start + 1, top + index + 1,
           selected ? background : text, selected ? text : background, selected ? TextAttributes.BOLD : undefined)
       })
-      if (help) buffer.drawText(help, start + 2, y - 2, muted, background)
+      if (help) buffer.drawText(help, start + 2, anchor - 2, muted, background)
     } finally {
       buffer.popScissorRect()
     }
@@ -296,7 +308,7 @@ export class ComposerGhost {
     if (this.visible()) {
       if (!this.canCycle()) return false
       const picker = this.shown!.picker
-      if (picker?.drawn === false && picker.geometry === this.pickerGeometry()) return this.cycle(1)
+      if (picker && picker.geometry === this.pickerGeometry()) return this.cycle(1)
       this.memo!.picker = true
       this.editor.requestRender()
       return true

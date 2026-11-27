@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { completionLayer } from "../src/keymap"
+import { completionLayer, displayShortcut } from "../src/keymap"
 import { parseQuillCommand, resolveOptions } from "../src/options"
 
 test("custom keys replace defaults and are passed to the host keymap", () => {
@@ -39,6 +39,15 @@ test("option parsing preserves host syntax and rejects invalid input", () => {
   for (const input of [{ enabled: "yes" }, { completeAtLineEnd: "yes" }, { completeAtLineEnd: 1 }, { acceptKeys: false }, { acceptKeys: [""] }, { dismissKeys: [1] }, { cycleNextKeys: "tab" }, { cyclePreviousKeys: [null] }]) {
     expect(() => resolveOptions(input)).toThrow()
   }
+})
+
+test("keys must not overlap across actions or contain commas", () => {
+  expect(() => resolveOptions({ acceptKeys: ["tab"], summonKeys: ["Tab"] })).toThrow("Quill Tab is bound in both acceptKeys and summonKeys")
+  expect(() => resolveOptions({ cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+n"] })).toThrow("bound in both cycleNextKeys and cyclePreviousKeys")
+  expect(() => resolveOptions({ dismissKeys: ["tab"] })).toThrow("bound in both acceptKeys and dismissKeys")
+  expect(() => resolveOptions({ acceptKeys: ["ctrl+,"] })).toThrow("acceptKeys must not contain commas")
+  expect(() => resolveOptions({ summonKeys: [","] })).toThrow("summonKeys must not contain commas")
+  expect(resolveOptions({ acceptKeys: ["tab"], dismissKeys: ["escape"], summonKeys: ["ctrl+y"], cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+p"] }).summonKeys).toEqual(["ctrl+y"])
 })
 
 test("minimum word length accepts non-negative integers and rejects invalid values", () => {
@@ -105,4 +114,16 @@ test("parses quill slash commands into toggle, explicit enable, and clear", () =
   expect(parseQuillCommand("clear casing")).toEqual({ type: "casing" })
   expect(parseQuillCommand("RESET CASING")).toEqual({ type: "casing" })
   expect(parseQuillCommand("unknown")).toEqual({ type: "invalid" })
+})
+
+test("command ids stay stable so OpenCode keybinds can override them", () => {
+  const layer = completionLayer(resolveOptions({ summonKeys: ["ctrl+y"] }), () => undefined)
+  expect(layer.commands!.filter((command) => command.id).map((command) => command.id)).toEqual(["quill.accept", "quill.dismiss", "quill.next", "quill.previous", "quill.summon"])
+})
+
+test("hints show the first displayable shortcut and skip control characters", () => {
+  expect(displayShortcut(["\u001b", " ", "\u007f", " Tab "])).toBe("Tab")
+  expect(displayShortcut(["⌃Y", "Tab"])).toBe("⌃Y")
+  expect(displayShortcut(["\t", "\u009b"])).toBeUndefined()
+  expect(displayShortcut([])).toBeUndefined()
 })

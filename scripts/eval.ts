@@ -102,6 +102,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
     wordsTop1: 0, wordsTop5: 0, prefixSaved: 0,
     nextPositions: 0, nextShown: 0, nextTop1: 0, nextWrong: 0, nextSaved: 0,
     bigramKnown: 0, bigramMissed: 0, bigramMissedNoSuggestion: 0, bigramMissedWrongList: 0,
+    endPositions: 0, endShown: 0, endHarmless: 0, endWrong: 0,
   }
   const missed = new Map<string, number>()
   const alternatives = { wordsTop3: 0, wordsTop3WithSummon: 0, automaticSaved: 0, cycleSaved: 0, netSaved: 0, cyclePresses: 0, summonPresses: 0, acceptPresses: 0 }
@@ -198,6 +199,15 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
           }
           if (candidates.slice(0, 5).some((candidate) => matches(candidate, offset))) top5 = true
         }
+        const { query: ending, candidates: endCandidates } = replayTo(end)
+        if (ending && !ending.next) {
+          m.endPositions++
+          if (endCandidates.length) {
+            m.endShown++
+            if (matches(endCandidates[0], end)) m.endHarmless++
+            else m.endWrong++
+          }
+        }
         if (first > 0) {
           m.wordsTop1++
           m.prefixSaved += Math.max(0, length - first - 1)
@@ -232,6 +242,7 @@ if (flag("--json")) {
 } else {
   console.log(`source: ${result.source}`)
   console.log(`split: ${split} (train on the oldest ${split === "val" ? 64 : 80}%, report on the next ${split === "val" ? 16 : 20}%)`)
+  console.log("complete-word positions: wrong = accepting the top suggestion changes the typed word (longer-word offer, apostrophe or typo replacement); harmless = accepting leaves the typed text unchanged")
   console.log("chars saved (code points): prefix = word length - prefix typed - 1 at the first prefix whose top-1 is right; next-word = word length - 1 when top-1 is right")
   if (measureAlternatives) console.log("alternatives: best available action per word, assuming the list fits and the intended candidate is known")
   for (const name of ["prose", "shell"] as const) {
@@ -248,6 +259,8 @@ if (flag("--json")) {
       ["chars saved, prefix", m.prefixSaved],
       ["chars saved, next-word", m.nextSaved],
       ["next-word shown / top-1 / wrong", `${m.nextShown} / ${m.nextTop1} / ${m.nextWrong}`],
+      ["complete-word positions", m.endPositions],
+      ["  shown / harmless / wrong", `${m.endShown} / ${m.endHarmless} / ${m.endWrong}`],
       ["known bigram missing target", `${m.bigramMissed} of ${m.bigramKnown}`],
       ["  no suggestion / wrong list", `${m.bigramMissedNoSuggestion} / ${m.bigramMissedWrongList}`],
     ]

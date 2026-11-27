@@ -815,3 +815,28 @@ test("equal spelling repairs require explicit summon even when requesting one ca
   expect(predictor.candidates(query)).toEqual([])
   expect(predictor.candidates(query, 5, true).map(({ word }) => word)).toEqual(["caper", "cater"])
 })
+
+test("summon keeps three-way ties of spelling repairs", () => {
+  const model = new PersonalModel()
+  const prompts = ["the caper now", "the cater now", "the caner now"].flatMap((text) => [1, 2, 3].map((n) => ({ id: `${text}${n}`, text })))
+  model.observe(prompts)
+  const predictor = new WordPredictor([])
+  predictor.setPersonal(model.snapshot())
+  const query = completionQuery("the cazer", 9)!
+  expect(predictor.candidates(query, 5)).toEqual([])
+  expect(predictor.candidates(query, 5, true).map(({ word }) => word).sort()).toEqual(["caner", "caper", "cater"])
+})
+
+test("a learned contraction leads the ranked list so other completions stay reachable", () => {
+  const model = new PersonalModel()
+  model.observe([{ id: "1", text: "we can't" }, { id: "2", text: "we can't" }, { id: "3", text: "we can't" }])
+  const predictor = new WordPredictor([{ word: "cantaloupe", count: 50 }, { word: "cant", count: 5 }])
+  predictor.setPersonal(model.snapshot())
+  const query = completionQuery("we cant", 7)!
+  const list = predictor.candidates(query, 5, true)
+  expect(list[0]).toMatchObject({ word: "can't", replace: 4 })
+  expect(list.map(({ word }) => word)).toContain("cantaloupe")
+  expect(new Set(list.map(({ word }) => word)).size).toBe(list.length)
+  expect(predictor.candidates(query)[0]).toMatchObject({ word: "can't", replace: 4 })
+  expect(predictor.candidates(query, 5, false, false).map(({ word }) => word)).not.toContain("can't")
+})
