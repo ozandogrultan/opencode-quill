@@ -293,8 +293,9 @@ Quill learns from your own submitted prompts, never from assistant output:
 - **Current draft:** words already in the draft get a small boost.
 - **Confidence gating:** a suggestion is shown only when it clears a
   confidence threshold, which is stricter for next-word predictions than for
-  prefix completions and, in prose, for single-letter prefixes. If a typed
-  prose prefix of two or more letters is already a confident word, a longer
+  prefix completions. In prose, single-letter prefixes and two-letter prefixes
+  without repeated context also require higher confidence. If a typed prose
+  prefix of two or more letters is already a confident word, a longer
   word is also offered when it scores at least 40% as high in the current
   context (typing `local` offers `locally`). Shell mode shows nothing when
   the typed command is already the most likely word.
