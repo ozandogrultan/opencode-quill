@@ -333,7 +333,7 @@ export class WordPredictor {
     return resolved
   }
 
-  candidates(query: CompletionQuery, limit = 5, summoned = false): Prediction[] {
+  candidates(query: CompletionQuery, limit = 5, summoned = false, allowContractionReplacement = true): Prediction[] {
     const maximum = Number.isFinite(limit) ? Math.max(0, Math.min(5, Math.floor(limit))) : 5
     if (!maximum) return []
     const prefix = this.grammar.normalize(query.prefix)
@@ -349,7 +349,7 @@ export class WordPredictor {
     if (query.next && evidence < 2) return []
     if (!query.next && prefixLength < 2 && evidence < 2) return []
     const typedPrevious = rawContext.at(-1)
-    if (this.grammar.prose && !query.next && prefixLength >= 3 && typedPrevious && /^[a-z]+$/.test(prefix)) {
+    if (allowContractionReplacement && this.grammar.prose && !query.next && prefixLength >= 3 && typedPrevious && /^[a-z]+$/.test(prefix)) {
       const ending = /n(t)$|(d|ll|re|ve)$/.exec(prefix)
       if (ending && prefixLength + 1 >= this.minSuggestedWordLength) {
         const apostrophe = prefix.length - (ending[1] ?? ending[2]).length

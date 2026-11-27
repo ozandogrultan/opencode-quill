@@ -107,9 +107,10 @@ export class ComposerGhost {
     const revision = predictor.modelRevision
     if (this.memo?.text === text && this.memo.offset === offset && this.memo.marks === signature && this.memo.revision === revision && this.memo.predictor === predictor) return this.memo.predictions[this.memo.index]
     const query = completionQuery(text, offset, this.protectedRanges(marks), this.completeAtLineEnd, predictor.grammar)
-    const predictions = query ? predictor.candidates(query) : []
-    if ((marks.length || offset !== text.length) && predictions[0]?.replace) predictions.length = 0
-    else if (marks.length || offset !== text.length) predictions.splice(0, predictions.length, ...predictions.filter((prediction) => !prediction.replace))
+    const allowReplacement = marks.length === 0 && offset === text.length
+    const predictions = query ? predictor.candidates(query, undefined, false, allowReplacement) : []
+    if (!allowReplacement && predictions[0]?.replace) predictions.length = 0
+    else if (!allowReplacement) predictions.splice(0, predictions.length, ...predictions.filter((prediction) => !prediction.replace))
     const last = this.shown
     if (query && !query.next && offset === text.length && last && last.offset === last.text.length && this.memo?.index === 0 && !this.memo.summoned && last.revision === revision && last.predictor === predictor && last.marks === signature && !last.prediction.replace && text.startsWith(last.text)) {
       const typed = text.slice(last.text.length)
@@ -209,8 +210,9 @@ export class ComposerGhost {
     const marks = this.editor.extmarks.getAll()
     const query = completionQuery(text, offset, this.protectedRanges(marks), this.completeAtLineEnd, predictor.grammar)
     if (!query) return false
-    const predictions = predictor.candidates(query, 5, true).filter((prediction) =>
-      (!(marks.length || offset !== text.length) || !prediction.replace) && this.fits(prediction))
+    const allowReplacement = marks.length === 0 && offset === text.length
+    const predictions = predictor.candidates(query, 5, true, allowReplacement).filter((prediction) =>
+      (allowReplacement || !prediction.replace) && this.fits(prediction))
     if (!predictions.length) return false
     this.dismissed = undefined
     this.memo = { text, offset, marks: this.marksKey(), revision: predictor.modelRevision, predictor, predictions, index: 0, summoned: true }
