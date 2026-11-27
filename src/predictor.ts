@@ -168,7 +168,7 @@ function editKind(source: string, target: string, targetLength = target.length):
   return doubled ? "delete" : undefined
 }
 
-function typoWeight(prefix: string, word: string, wholeWord = false): number {
+function typoWeight(prefix: string, word: string, wholeWord = false, protectEnding = false): number {
   const prefixLength = prefix.length
   const wordLength = word.length
   if (prefixLength < 3) return 0
@@ -184,7 +184,7 @@ function typoWeight(prefix: string, word: string, wholeWord = false): number {
   if (prefixLength < 5 || wordLength <= prefixLength) return 0
   const partial = editKind(prefix, word, prefixLength)
   if (partial === "transpose") return 0.06
-  if (partial === "substitute") return 0.02
+  if (partial === "substitute" && !(protectEnding && word.startsWith(prefix.slice(0, -1)))) return 0.02
   if (wordLength > prefixLength + 1 && editKind(prefix, word, prefixLength + 1) === "insert") return 0.03
   if (editKind(prefix, word, prefixLength - 1) === "delete") return 0.02
   return 0
@@ -341,12 +341,26 @@ export class WordPredictor {
     const words = query.words ?? (this.grammar.prose ? proseWords(query.before) : [])
     const local = new Map<string, number>()
     for (const word of words) increment(local, word.text)
-    const context = this.resolveContext(leftContext(query.before, words), local)
+    const rawContext = leftContext(query.before, words)
+    const context = this.resolveContext(rawContext, local)
     const previous = context.at(-1)
     const pair = context.length === 2 ? context.join("\0") : undefined
     const evidence = this.bigramTotals.get(previous ?? "")?.total ?? 0
     if (query.next && evidence < 2) return []
     if (!query.next && prefixLength < 2 && evidence < 2) return []
+    const typedPrevious = rawContext.at(-1)
+    if (this.grammar.prose && !query.next && prefixLength >= 3 && typedPrevious && /^[a-z]+$/.test(prefix)) {
+      const ending = /n(t)$|(d|ll|re|ve)$/.exec(prefix)
+      if (ending && prefixLength + 1 >= this.minSuggestedWordLength) {
+        const apostrophe = prefix.length - (ending[1] ?? ending[2]).length
+        const word = `${prefix.slice(0, apostrophe)}'${prefix.slice(apostrophe)}`
+        const count = this.personal.bigrams.get(`${typedPrevious}\0${word}`) ?? 0
+        const total = this.bigramTotals.get(typedPrevious)?.total ?? 0
+        if (count >= 2 && count > total / 2) {
+          return [{ word, suffix: applyCase(query.prefix, this.forms.get(word) ?? word), confidence: count / total, replace: query.prefix.length }]
+        }
+      }
+    }
     const slash = prefix.includes("/")
     const followed = (word: string) => (previous ? this.personal.bigrams.get(`${previous}\0${word}`) ?? 0 : 0) >= 2 ||
       (pair ? this.personal.trigrams.get(`${pair}\0${word}`) ?? 0 : 0) >= 2
@@ -363,8 +377,9 @@ export class WordPredictor {
       }
     }
     for (const word of local.keys()) if (!word.includes("/") && word.startsWith(prefix) && (query.next || !slash) && eligible(word)) candidates.set(word, 1)
-    const suggest = (): Prediction[] => {
+    const suggest = (typos = false): Prediction[] => {
       const ranked: { word: string; score: number; weight: number }[] = []
+      const retained = typos ? Math.max(2, maximum) : maximum
       let sum = 0
       for (const [word, weight] of candidates) {
         const base = this.score(word, context, weight < 1) + (query.next ? 0 : 0.003 * Math.min(local.get(word) ?? 0, 3))
@@ -373,8 +388,10 @@ export class WordPredictor {
         if (this.minSuggestedWordLength && word !== prefix && [...word].length < this.minSuggestedWordLength) continue
         ranked.push({ word, score, weight })
         ranked.sort((a, b) => b.score - a.score)
-        if (ranked.length > maximum + (this.grammar.prose && candidates.has(prefix) && !query.next ? 1 : 0)) ranked.pop()
+        if (ranked.length > retained + (this.grammar.prose && candidates.has(prefix) && !query.next ? 1 : 0)) ranked.pop()
       }
+      const [best, runnerUp] = ranked
+      if (typos && !summoned && best && runnerUp && best.weight < 1 && best.score === runnerUp.score) return []
       const predictions: Prediction[] = []
       const exact = query.next ? 0 : ranked.find(({ word }) => word === prefix)?.score ?? 0
       const short = prefixLength < 2
@@ -410,16 +427,17 @@ export class WordPredictor {
     }
     const completion = suggest()
     if (completion.length || query.next || prefixLength < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return completion
+    const protectEnding = this.known.has(prefix.slice(0, -1))
     for (const word of this.nearbyWords(prefix)) {
       if (candidates.has(word)) continue
-      const weight = typoWeight(prefix, word)
+      const weight = typoWeight(prefix, word, false, protectEnding)
       if (weight > 0) candidates.set(word, weight)
     }
     for (const word of local.keys()) {
       if (candidates.has(word) || word.includes("/")) continue
-      const weight = typoWeight(prefix, word)
+      const weight = typoWeight(prefix, word, false, protectEnding)
       if (weight > 0) candidates.set(word, weight)
     }
-    return suggest()
+    return suggest(true)
   }
 }
