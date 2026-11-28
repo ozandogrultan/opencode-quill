@@ -36,6 +36,9 @@ export function resolveOptions(input: Readonly<Record<string, unknown>>): Option
   for (const name of Object.keys(defaults)) bindings[name] = []
   for (const name of given) claim(name, lists[name], true)
   for (const name of Object.keys(defaults)) if (!given.includes(name)) claim(name, lists[name], false)
+  for (const name of Object.keys(defaults)) {
+    if (!given.includes(name) && defaults[name].length && !bindings[name].length) warnings.push(`${name} left without keys: its defaults (${defaults[name].join(", ")}) are bound to other actions`)
+  }
   return {
     enabled: input.enabled !== false,
     completeAtLineEnd: input.completeAtLineEnd === true,

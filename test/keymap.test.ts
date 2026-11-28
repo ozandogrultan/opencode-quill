@@ -52,6 +52,14 @@ test("a configured key takes over a default key from another action silently", (
   expect(resolveOptions({ summonKeys: ["tab"] })).toMatchObject({ acceptKeys: ["right"], summonKeys: ["tab"], warnings: [] })
 })
 
+test("an action whose default keys are all taken by other actions is named in a warning", () => {
+  const taken = resolveOptions({ dismissKeys: ["tab", "right"] })
+  expect(taken.acceptKeys).toEqual([])
+  expect(taken.warnings).toEqual(["acceptKeys left without keys: its defaults (tab, right) are bound to other actions"])
+  expect(resolveOptions({ acceptKeys: [] }).warnings).toEqual([])
+  expect(resolveOptions({ acceptKeys: ["ctrl+y"], dismissKeys: ["tab"] }).warnings).toEqual([])
+})
+
 test("keys are deduplicated case-insensitively within a list", () => {
   expect(resolveOptions({ acceptKeys: ["Tab", "tab", "ctrl+y"] })).toMatchObject({ acceptKeys: ["Tab", "ctrl+y"], warnings: [] })
 })
