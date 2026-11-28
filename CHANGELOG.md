@@ -4,6 +4,12 @@ All notable changes are documented in this file using
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [0.10.4] - 2026-11-28
+
+### Fixed
+
+- **options:** Warn and drop conflicting keys instead of failing to load (#40)
+
 ## [0.10.3] - 2026-11-28
 
 ### Fixed
@@ -217,6 +223,7 @@ All notable changes are documented in this file using
 - `/quill` command and command palette action to toggle autocomplete.
 - Local installer script, full test suite, CI workflows, and release tooling.
 
+[0.10.4]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.0...v0.10.1
