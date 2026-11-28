@@ -14,7 +14,8 @@ README.md is the user-facing contract — read it before changing behavior.
 - `src/ghost.ts` — OpenTUI buffer painting, cursor tracking, eligibility checks, and insertion.
 - `src/options.ts` — option parsing and validation.
 - `src/keymap.ts` — reactive keymap layer construction for accept and dismiss actions.
-- `scripts/eval.ts` — `bun run eval`: replays your OpenCode history (read-only DB) through the predictor on a time split and prints aggregate metrics. `--split val|test`, `--json`, `--db <path>`, `--prompts <file>` (frozen benchmark), `--freeze <file>` (write one, owner-only, keep outside the repo), `--examples`, `--alternatives` (coverage and net keystrokes for cycling and summoning).
+- `scripts/eval.ts` — `bun run eval`: replays your OpenCode history (read-only DB) through the predictor on a time split and prints aggregate metrics. `--split val|test`, `--json`, `--db <path>`, `--prompts <file>` (frozen benchmark), `--freeze <file>` (write one, owner-only, keep outside the repo), `--examples`, `--alternatives` (coverage and net keystrokes for cycling and summoning), `--replacements` (wrong replacements in a word and at word end, split by whether they change the typed prefix).
+- `scripts/probes.ts` — `bun run eval --probes`: synthetic typo, missing-apostrophe and technical-swap probes against the shipped prior; needs no history and prints no prompt text.
 - `test/` — Bun unit and installer tests.
 - `bunfig.toml` — preloads the OpenTUI Solid transform for tests.
 - `install.sh` — copies sources and registers a directory in global `cli.json`.
