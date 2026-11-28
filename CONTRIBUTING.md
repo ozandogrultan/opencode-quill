@@ -40,7 +40,9 @@ Recommended workflow: freeze a benchmark, tune on `--split val --online`
 (score-then-learn, as the plugin learns after every prompt), compare before and
 after with `--alternatives --per-prompt <file>` on each branch followed by
 `bun run eval --bootstrap <before.json> <after.json>` (paired 95% intervals),
-and report the test split once. Per-prompt files hold counts only, never text.
+and report the test split once. Both files must come from the same prompts, `--split`
+and `--online` setting; the bootstrap refuses mismatches. Per-prompt files hold counts
+only, never text.
 
 ## Guidelines
 
