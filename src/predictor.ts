@@ -284,6 +284,7 @@ export class WordPredictor {
         const word = this.vocabulary[index]
         if (!word.startsWith(head)) break
         if (word.includes("/")) continue
+        if (word.length < chars.length - 1) continue
         const length = [...word].length
         if (length >= chars.length - 1 && length <= maxLength) yield word
       }
@@ -395,7 +396,7 @@ export class WordPredictor {
         sum += score
         if (this.minSuggestedWordLength && word !== prefix && [...word].length < this.minSuggestedWordLength) continue
         ranked.push({ word, score, weight })
-        ranked.sort((a, b) => b.score - a.score)
+        ranked.sort((a, b) => Math.abs(a.score - b.score) <= TIE_EPSILON * Math.max(a.score, b.score) ? (a.word < b.word ? -1 : 1) : b.score - a.score)
         if (ranked.length > retained + (this.grammar.prose && candidates.has(prefix) && !query.next ? 1 : 0)) ranked.pop()
       }
       const [best, runnerUp] = ranked

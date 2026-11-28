@@ -237,8 +237,13 @@ alternative, with or without the picker drawn.
 Cycling skips suggestions that don't fit on the cursor row. Up and Down keep
 their normal behavior when no picker is visible.
 
-Each key may be bound to only one action, and keys must not contain commas;
-invalid options fail at startup. Keys are set only with these options;
+Each key may be bound to only one action, and keys must not contain commas.
+A key repeated within a list is kept once. A key already bound by an earlier
+configured list (order: `acceptKeys`, `dismissKeys`, `cycleNextKeys`,
+`cyclePreviousKeys`, `summonKeys`) and any key containing a comma is dropped
+with a warning toast. A configured key replaces the same key in another action's
+default, so `dismissKeys: ["right"]` leaves `acceptKeys` as `["tab"]`.
+Options of the wrong type fail at startup. Keys are set only with these options;
 OpenCode's `keybinds` map does not rebind Quill's commands. Hints in the
 picker and counter show the first displayable key for each action.
 
@@ -299,7 +304,7 @@ Quill learns from your own submitted prompts, never from assistant output:
   confidence threshold, which is stricter for next-word predictions than for
   prefix completions. In prose, single-letter prefixes and two-letter prefixes
   without repeated context also require higher confidence. When the typed prose
-  prefix is itself a known word, a longer word is offered only if it clears
+  word is itself a candidate (a vocabulary word or one typed earlier in the draft), a longer word is offered only if it clears
   the same confidence and scores at least 70% as high as the typed word in the
   current context (typing `local` offers `locally` when it is nearly as
   likely); the two-letter guard raises the confidence that offer needs as
