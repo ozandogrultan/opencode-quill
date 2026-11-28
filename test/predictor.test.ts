@@ -854,3 +854,11 @@ test("equal spelling repairs abstain even when their float scores differ", () =>
   expect(complete(predictor, "abcef")).toBeUndefined()
   expect(predictor.candidates(completionQuery("abcef", 5)!, 5, true).map(({ word }) => word).sort()).toEqual(["abcdef", "abcez"])
 })
+
+test("candidates whose scores differ only by float noise rank alphabetically", () => {
+  const predictor = new WordPredictor([{ word: "zeb", count: 5 }, { word: "zea", count: 5 }], proseGrammar)
+  const scores: Record<string, number> = { zea: 0.4, zeb: 0.4 * (1 + 1e-12) }
+  spyOn(predictor as unknown as { score(word: string): number }, "score").mockImplementation((word: string) => scores[word])
+  const words = predictor.candidates(completionQuery("ze", 2)!, 5, true).map(({ word }) => word)
+  expect(words).toEqual(["zea", "zeb"])
+})
