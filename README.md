@@ -225,7 +225,10 @@ Press Ctrl+Y to see the available words in a box above the active word, or
 above the top of the editor when the cursor is below its first row. The box
 uses an opaque background even on transparent themes. If no
 automatic suggestion appears, Ctrl+Y can summon lower-confidence candidates.
-While the list is visible, Up and Down move the highlight and the inline ghost previews the
+This matters most after a space: next-word predictions are shown automatically
+only when one word is likely, but summoning lists the words you usually type
+after the previous word, even when none of them is confident enough to show on
+its own. While the list is visible, Up and Down move the highlight and the inline ghost previews the
 selection. Tab accepts it, Escape closes the list, and editing the draft or
 moving the cursor resets it. Enter keeps its usual behavior.
 
