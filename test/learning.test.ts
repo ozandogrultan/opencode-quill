@@ -10,7 +10,7 @@ const cleanups: (() => void | Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve))
 
-async function setup(sync: () => Promise<void>, initialMessages: Message[] = [], initialWrite?: Promise<void>, route = "home", sessions: SessionInfo[] = [{ id: "session", time: { updated: 1 } }], initialSnapshot = emptySnapshot()) {
+async function setup(sync: () => Promise<void>, initialMessages: Message[] = [], initialWrite?: Promise<void>, route = "home", sessions: SessionInfo[] = [{ id: "session", time: { updated: 1 } }], initialSnapshot = emptySnapshot(), options: Record<string, unknown> = {}) {
   let messages = initialMessages
   let writeGate = initialWrite
   const [learning, setLearning] = createStore({ snapshot: structuredClone(initialSnapshot) })
@@ -19,7 +19,7 @@ async function setup(sync: () => Promise<void>, initialMessages: Message[] = [],
   const layers: (() => Layer)[] = []
   const toast = mock(() => {})
   const context = {
-    options: {},
+    options,
     storage: {
       store: (key: string) => key === "settings"
         ? [settings, async (mutate: (draft: { enabled: boolean }) => void) => { setSettings(produce(mutate)) }]
@@ -278,4 +278,14 @@ test("a queued live event retains warning behavior after a silent backfill fails
   await settle()
   expect(sync).toHaveBeenCalledTimes(2)
   expect(fixture.toast).toHaveBeenCalledTimes(1)
+})
+
+test("shows every option warning in one toast", async () => {
+  const fixture = await setup(async () => {}, [], undefined, "home", undefined, undefined, { acceptKeys: ["tab"], summonKeys: ["tab", "a,b"] })
+  expect(fixture.toast).toHaveBeenCalledTimes(1)
+  expect(fixture.toast).toHaveBeenCalledWith({
+    title: "Quill",
+    message: "tab in summonKeys ignored: already bound in acceptKeys\na,b in summonKeys ignored: keys must not contain commas",
+    variant: "warning",
+  })
 })
