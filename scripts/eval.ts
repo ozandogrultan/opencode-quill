@@ -118,7 +118,7 @@ function changesPrefix(prediction: Prediction, typed: string): boolean {
 
 function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
   const { train, test } = partition(prompts)
-  const model = new PersonalModel(undefined, grammar)
+  let model = new PersonalModel(undefined, grammar)
   model.observe(train)
   const snapshot = model.snapshot()
   const predictor = new WordPredictor(grammar.prose ? frequencies : [], grammar, 0)
@@ -276,6 +276,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
     if (online) {
       model.observe([prompt])
       const learned = model.snapshot()
+      model = new PersonalModel(learned, grammar)
       predictor.setPersonal(learned)
       bigrams = new Map(learned.bigrams)
     }
@@ -288,6 +289,8 @@ const examples = flag("--examples")
 const result = {
   split,
   source: promptsPath ?? dbPath,
+  online,
+  alternatives: measureAlternatives,
   prose: evaluate(proseGrammar, corpus.prose, examples),
   shell: evaluate(shellGrammar, corpus.shell, examples),
 }
