@@ -1,4 +1,5 @@
 import { test, expect } from "bun:test"
+import { pairedBootstrap } from "../scripts/bootstrap"
 import { Database } from "bun:sqlite"
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -40,7 +41,7 @@ test("freezes synthetic history only in new owner-only files outside the real re
       const destination = join(directory, "benchmarks", "history.json")
       expect(freeze(destination).exitCode).toBe(0)
       expect(statSync(destination).mode & 0o777).toBe(0o600)
-      expect(JSON.parse(readFileSync(destination, "utf8"))).toEqual({ prose: [{ id: "p", text: "synthetic prompt" }], shell: [] })
+      expect(JSON.parse(readFileSync(destination, "utf8"))).toEqual({ prose: [{ id: "p", text: "synthetic prompt", session: "s", time: 1 }], shell: [] })
       writeFileSync(destination, "existing benchmark")
       expect(freeze(destination).exitCode).not.toBe(0)
       expect(readFileSync(destination, "utf8")).toBe("existing benchmark")
@@ -162,4 +163,64 @@ test("probes use only synthetic text and need no history", () => {
   expect(probes.apostrophes).toEqual({ total: 8, cold: 0, learned: 7 })
   expect(probes.technicalTranspositions).toEqual({ total: 4, cold: 0, learned: 4 })
   expect(run("--probes", "--db", "/nonexistent/history.db").stdout.toString()).toContain("missing apostrophe, cold / learned  0 / 7 of 8")
+})
+
+test("frozen prompts keep session and time and load without them", () => {
+  withTemp((directory) => {
+    const frozen = join(directory, "frozen.json")
+    writeFileSync(frozen, JSON.stringify({ prose: [1, 2, 3, 4, 5].map((time) => ({ id: String(time), text: "run tests", session: "s", time })), shell: [] }))
+    const timed = run("--prompts", frozen, "--json")
+    expect(timed.exitCode).toBe(0)
+    expect(JSON.parse(timed.stdout.toString()).prose).toMatchObject({ train: 4, test: 1 })
+    const legacy = join(directory, "legacy.json")
+    writeFileSync(legacy, JSON.stringify([1, 2, 3, 4, 5].map((id) => ({ id: String(id), text: "run tests" }))))
+    const old = run("--prompts", legacy, "--json")
+    expect(old.exitCode).toBe(0)
+    expect(JSON.parse(old.stdout.toString()).prose).toMatchObject({ train: 4, test: 1 })
+  })
+})
+
+test("online replay learns each test prompt after scoring it", () => {
+  const prompts = [...Array<string>(12).fill("filler words here"), ...Array<string>(4).fill("zebra crossing ahead")]
+  const replay = (...extra: string[]) => withTemp((directory) => {
+    const path = join(directory, "prompts.json")
+    writeFileSync(path, JSON.stringify(prompts.map((text, id) => ({ id: String(id), text }))))
+    const execution = run("--prompts", path, "--json", ...extra)
+    expect(execution.exitCode).toBe(0)
+    return JSON.parse(execution.stdout.toString()).prose
+  })
+  const offline = replay()
+  const online = replay("--online")
+  expect(offline.test).toBe(4)
+expect(online.rows[0]).toEqual(offline.rows[0])
+  expect(online.prefixSaved).toBeGreaterThan(offline.prefixSaved)
+  expect(online.nextSaved).toBeGreaterThan(offline.nextSaved)
+  expect(online.wrongShown).toBeLessThan(offline.wrongShown)
+})
+
+test("per-prompt output holds numbers only and stays outside the repository", () => {
+  withTemp((directory) => {
+    const path = join(directory, "prompts.json")
+    writeFileSync(path, JSON.stringify(["secretword alpha", "secretword alpha", "secretword alpha", "secretword alpha", "secretword alpha"].map((text, id) => ({ id: String(id), text }))))
+    const output = join(directory, "nested", "per.json")
+    expect(run("--prompts", path, "--per-prompt", output, "--alternatives").exitCode).toBe(0)
+    expect(statSync(output).mode & 0o777).toBe(0o600)
+    const contents = readFileSync(output, "utf8")
+    expect(contents).not.toContain("secretword")
+    const parsed = JSON.parse(contents)
+    expect(parsed.prose).toHaveLength(1)
+    expect(parsed.prose.flat().every((count: unknown) => typeof count === "number")).toBe(true)
+    expect(run("--prompts", path, "--per-prompt", join(root, "per.json")).stderr.toString()).toContain("outside the repository")
+    expect(existsSync(join(root, "per.json"))).toBe(false)
+  })
+})
+
+test("paired bootstrap excludes zero for a clear shift and includes it for none", () => {
+  const noise = Array.from({ length: 200 }, (_, index) => (index % 3) - 1)
+  const shifted = pairedBootstrap(noise.map((value) => value + 2))
+  expect(shifted.excludesZero).toBe(true)
+  expect(shifted.low).toBeGreaterThan(0)
+  const flat = pairedBootstrap(noise)
+  expect(flat.excludesZero).toBe(false)
+  expect(pairedBootstrap(noise)).toEqual(flat)
 })

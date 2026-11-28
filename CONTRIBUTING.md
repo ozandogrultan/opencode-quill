@@ -32,7 +32,15 @@ OpenCode history. Compare before and after on the default test split and tune
 only against `--split val`. Pruning sessions shrinks that history, so freeze a
 benchmark once with `bun run eval --freeze <file>` and compare against it with
 `--prompts <file>`. The frozen file holds raw prompt text: keep it outside the
-repository; it is written with owner-only permissions.
+repository; it is written with owner-only permissions. It also records each
+prompt's session and time; older frozen files without them load in file order
+with no session grouping.
+
+Recommended workflow: freeze a benchmark, tune on `--split val --online`
+(score-then-learn, as the plugin learns after every prompt), compare before and
+after with `--alternatives --per-prompt <file>` on each branch followed by
+`bun run eval --bootstrap <before.json> <after.json>` (paired 95% intervals),
+and report the test split once. Per-prompt files hold counts only, never text.
 
 ## Guidelines
 

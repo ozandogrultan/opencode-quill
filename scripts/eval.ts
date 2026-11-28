@@ -20,6 +20,8 @@ const promptsPath = value("--prompts")
 const freezePath = value("--freeze")
 const measureAlternatives = flag("--alternatives")
 const showReplacements = flag("--replacements")
+const online = flag("--online")
+const perPromptPath = value("--per-prompt")
 
 if (flag("--probes")) {
   const { printProbes, runProbes } = await import("./probes")
@@ -29,7 +31,16 @@ if (flag("--probes")) {
   process.exit(0)
 }
 
-type Prompt = { id: string; text: string }
+if (flag("--bootstrap")) {
+  const { bootstrapReport } = await import("./bootstrap")
+  const index = args.indexOf("--bootstrap")
+  const [before, after] = args.slice(index + 1, index + 3)
+  if (!before || !after) throw new Error("--bootstrap requires <before.json> <after.json>")
+  console.log(bootstrapReport(await Bun.file(before).json(), await Bun.file(after).json()))
+  process.exit(0)
+}
+
+type Prompt = { id: string; text: string; session?: string; time?: number }
 type Corpus = { prose: Prompt[]; shell: Prompt[] }
 
 const usable = (row: any): row is Prompt =>
@@ -39,7 +50,7 @@ function fromDatabase(): Corpus {
   const db = new Database(dbPath, { readonly: true })
   try {
     const rows = (type: string, field: string) => db.query(
-      "SELECT m.id AS id, json_extract(m.data, ?) AS text FROM session_message m JOIN session_v2 s ON s.id = m.session_id " +
+      "SELECT m.id AS id, json_extract(m.data, ?) AS text, m.session_id AS session, m.time_created AS time FROM session_message m JOIN session_v2 s ON s.id = m.session_id " +
       "WHERE m.type = ? AND s.parent_id IS NULL ORDER BY m.time_created, m.id",
     ).all(field, type) as Prompt[]
     return { prose: rows("user", "$.text"), shell: rows("shell", "$.command") }
@@ -50,10 +61,26 @@ function fromDatabase(): Corpus {
 
 async function fromFile(path: string): Promise<Corpus> {
   const data = await Bun.file(path).json()
-  return Array.isArray(data) ? { prose: data, shell: [] } : { prose: data.prose ?? [], shell: data.shell ?? [] }
+  const ordered = (prompts: Prompt[]) =>
+    prompts.every((prompt) => Number.isFinite(prompt?.time)) ? prompts.map((prompt, index) => ({ prompt, index })).sort((a, b) => a.prompt.time! - b.prompt.time! || a.index - b.index).map(({ prompt }) => prompt) : prompts
+  return Array.isArray(data) ? { prose: ordered(data), shell: [] } : { prose: ordered(data.prose ?? []), shell: ordered(data.shell ?? []) }
 }
 
-function freezeParent(path: string): string {
+function writeOutsideRepository(option: string, path: string, content: string): void {
+  const root = dirname(realpathSync(import.meta.dir))
+  const outsideRepo = (parent: string) => {
+    const relation = relative(root, parent)
+    if (relation !== ".." && !relation.startsWith(`..${sep}`) && !isAbsolute(relation)) throw new Error(`${option} must write outside the repository`)
+    return parent
+  }
+  const name = basename(path)
+  if (!name || name === "." || name === ".." || path.endsWith(sep)) throw new Error(`${option} requires a file path`)
+  const parent = outsideRepo(ownerParent(option, dirname(path)))
+  mkdirSync(parent, { recursive: true, mode: 0o700 })
+  writeFileSync(join(outsideRepo(realpathSync(parent)), name), content, { flag: "wx", mode: 0o600 })
+}
+
+function ownerParent(option: string, path: string): string {
   let parent = isAbsolute(path) ? sep : realpathSync(process.cwd())
   for (const part of path.split(sep)) {
     if (part === "..") parent = dirname(parent)
@@ -61,26 +88,15 @@ function freezeParent(path: string): string {
       const child = join(parent, part)
       const entry = lstatSync(child, { throwIfNoEntry: false })
       parent = entry ? realpathSync(child) : child
-      if (entry && !(entry.isSymbolicLink() ? statSync(parent) : entry).isDirectory()) throw new Error("--freeze parent must be a directory")
+      if (entry && !(entry.isSymbolicLink() ? statSync(parent) : entry).isDirectory()) throw new Error(`${option} parent must be a directory`)
     }
   }
   return parent
 }
 
 if (freezePath) {
-  const root = dirname(realpathSync(import.meta.dir))
-  const outsideRepo = (parent: string) => {
-    const path = relative(root, parent)
-    if (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path)) throw new Error("--freeze must write outside the repository")
-    return parent
-  }
-  const name = basename(freezePath)
-  if (!name || name === "." || name === ".." || freezePath.endsWith(sep)) throw new Error("--freeze requires a file path")
-  const parent = outsideRepo(freezeParent(dirname(freezePath)))
   const corpus = fromDatabase()
-  mkdirSync(parent, { recursive: true, mode: 0o700 })
-  const destination = join(outsideRepo(realpathSync(parent)), name)
-  writeFileSync(destination, JSON.stringify(corpus), { flag: "wx", mode: 0o600 })
+  writeOutsideRepository("--freeze", freezePath, JSON.stringify(corpus))
   console.log(`froze ${corpus.prose.length} prompts and ${corpus.shell.length} shell commands to ${freezePath}`)
   process.exit(0)
 }
@@ -107,7 +123,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
   const snapshot = model.snapshot()
   const predictor = new WordPredictor(grammar.prose ? frequencies : [], grammar, 0)
   predictor.setPersonal(snapshot)
-  const bigrams = new Map<string, number>(snapshot.bigrams)
+  let bigrams = new Map<string, number>(snapshot.bigrams)
   const wrongByPrefix: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4+": 0 }
   const m = {
     train: train.length, test: test.length, words: 0, wordChars: 0,
@@ -121,7 +137,13 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
   }
   const missed = new Map<string, number>()
   const alternatives = { wordsTop3: 0, wordsTop3WithSummon: 0, automaticSaved: 0, cycleSaved: 0, netSaved: 0, cyclePresses: 0, summonPresses: 0, acceptPresses: 0 }
+  const rows: number[][] = []
+  const tally = () => [
+    m.wrongShown, m.prefixSaved, m.nextSaved, m.nextWrong, m.endWrong, alternatives.netSaved,
+    m.words, m.wordsTop1, m.nextShown, m.nextTop1,
+  ]
   for (const prompt of test) {
+    const before = tally()
     let cursor = 0
     let query: ReturnType<typeof completionQuery>
     let candidates: Prediction[] = []
@@ -249,10 +271,19 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
         }
       }
     }
+    const after = tally()
+    rows.push(after.map((count, index) => count - before[index]))
+    if (online) {
+      model.observe([prompt])
+      const learned = model.snapshot()
+      predictor.setPersonal(learned)
+      bigrams = new Map(learned.bigrams)
+    }
   }
-  return { ...m, alternatives: measureAlternatives ? alternatives : undefined, missedWords: examples ? [...missed].sort((a, b) => b[1] - a[1]).slice(0, 15) : undefined }
+  return { ...m, rows, alternatives: measureAlternatives ? alternatives : undefined, missedWords: examples ? [...missed].sort((a, b) => b[1] - a[1]).slice(0, 15) : undefined }
 }
 
+const PER_PROMPT_METRICS = ["wrongShown", "prefixSaved", "nextSaved", "nextWrong", "endWrong", "netSaved", "words", "wordsTop1", "nextShown", "nextTop1"]
 const examples = flag("--examples")
 const result = {
   split,
@@ -261,10 +292,16 @@ const result = {
   shell: evaluate(shellGrammar, corpus.shell, examples),
 }
 
+if (perPromptPath) {
+  const strip = (m: { rows: number[][] }) => m.rows
+  writeOutsideRepository("--per-prompt", perPromptPath, JSON.stringify({ metrics: PER_PROMPT_METRICS, split, online, alternatives: measureAlternatives, prose: strip(result.prose), shell: strip(result.shell) }))
+}
+
 if (flag("--json")) {
   console.log(JSON.stringify(result))
 } else {
   console.log(`source: ${result.source}`)
+  console.log(`replay: ${online ? "score then learn (each test prompt is learned after it is scored)" : "trained once on the training prompts"}`)
   console.log(`split: ${split} (train on the oldest ${split === "val" ? 64 : 80}%, report on the next ${split === "val" ? 16 : 20}%)`)
   console.log("complete-word positions: wrong = accepting the top suggestion changes the typed word (longer-word offer, apostrophe or typo replacement); harmless = accepting leaves the typed text unchanged")
   console.log("chars saved (code points): prefix = word length - prefix typed - 1 at the first prefix whose top-1 is right; next-word = word length - 1 when top-1 is right")
