@@ -16,8 +16,9 @@ export type Prediction = { suffix: string; word: string; confidence: number; rep
 const DISCOUNT = 0.5
 const CONFIDENCE = 0.3
 const SHORT_CONFIDENCE = 0.4
-const EXACT_RATIO = 0.4
+const EXACT_RATIO = 0.7
 const FRAGMENT_RATIO = 3
+const TIE_EPSILON = 1e-9
 const MIN_TYPO_SCORE = 0.000001
 const PRIOR_LIMIT = 20_000
 const WORD_LIMIT = 8000
@@ -169,11 +170,13 @@ function editKind(source: string, target: string, targetLength = target.length):
 }
 
 function typoWeight(prefix: string, word: string, wholeWord = false, protectEnding = false): number {
-  const prefixLength = prefix.length
-  const wordLength = word.length
+  const prefixChars = [...prefix]
+  const prefixLength = prefixChars.length
+  const wordChars = [...word]
+  const wordLength = wordChars.length
   if (prefixLength < 3) return 0
-  const sameHead = prefix[0] === word[0]
-  const swappedHead = prefixLength >= 5 && prefix[0] === word[1] && prefix[1] === word[0]
+  const sameHead = prefixChars[0] === wordChars[0]
+  const swappedHead = prefixLength >= 5 && prefixChars[0] === wordChars[1] && prefixChars[1] === wordChars[0]
   if (!sameHead && !swappedHead) return 0
   const full = editKind(prefix, word)
   if (wholeWord && !full) return 0
@@ -182,11 +185,11 @@ function typoWeight(prefix: string, word: string, wholeWord = false, protectEndi
   if (full === "insert" || full === "delete") return 0.06
   if (full === "substitute") return 0.04
   if (prefixLength < 5 || wordLength <= prefixLength) return 0
-  const partial = editKind(prefix, word, prefixLength)
+  const partial = editKind(prefix, word, prefix.length)
   if (partial === "transpose") return 0.06
-  if (partial === "substitute" && !(protectEnding && word.startsWith(prefix.slice(0, -1)))) return 0.02
-  if (wordLength > prefixLength + 1 && editKind(prefix, word, prefixLength + 1) === "insert") return 0.03
-  if (editKind(prefix, word, prefixLength - 1) === "delete") return 0.02
+  if (partial === "substitute" && !(protectEnding && word.startsWith(prefixChars.slice(0, -1).join("")))) return 0.02
+  if (wordLength > prefixLength + 1 && editKind(prefix, word, prefix.length + 1) === "insert") return 0.03
+  if (editKind(prefix, word, prefix.length - 1) === "delete") return 0.02
   return 0
 }
 
@@ -272,14 +275,17 @@ export class WordPredictor {
   }
 
   private *nearbyWords(prefix: string, wholeWord = false): IterableIterator<string> {
-    const heads = [prefix[0]]
-    if (prefix.length >= 5 && prefix[0] !== prefix[1]) heads.push(prefix[1] + prefix[0])
-    const maxLength = wholeWord || prefix.length < 5 ? prefix.length + 1 : Infinity
+    const chars = [...prefix]
+    const heads = [chars[0]]
+    if (chars.length >= 5 && chars[0] !== chars[1]) heads.push(chars[1] + chars[0])
+    const maxLength = wholeWord || chars.length < 5 ? chars.length + 1 : Infinity
     for (const head of heads) {
       for (let index = lowerBound(this.vocabulary, head); index < this.vocabulary.length; index++) {
         const word = this.vocabulary[index]
         if (!word.startsWith(head)) break
-        if (!word.includes("/") && word.length >= prefix.length - 1 && word.length <= maxLength) yield word
+        if (word.includes("/")) continue
+        const length = [...word].length
+        if (length >= chars.length - 1 && length <= maxLength) yield word
       }
     }
   }
@@ -393,13 +399,12 @@ export class WordPredictor {
         if (ranked.length > retained + (this.grammar.prose && candidates.has(prefix) && !query.next ? 1 : 0)) ranked.pop()
       }
       const [best, runnerUp] = ranked
-      if (typos && !summoned && best && runnerUp && best.weight < 1 && best.score === runnerUp.score) return []
+      if (typos && !summoned && best && runnerUp && best.weight < 1 && Math.abs(best.score - runnerUp.score) <= TIE_EPSILON * Math.max(best.score, runnerUp.score)) return []
       const predictions: Prediction[] = []
       const exact = query.next ? 0 : ranked.find(({ word }) => word === prefix)?.score ?? 0
       const short = prefixLength < 2
       const cautiousPrefix = short || (prefixLength === 2 && evidence < 2)
       const threshold = this.grammar.prose && cautiousPrefix ? SHORT_CONFIDENCE : CONFIDENCE
-      const exactConfident = this.grammar.prose && !short && exact >= threshold * (sum || 1)
       for (const { word: best, score: bestScore, weight: bestWeight } of ranked) {
         if (best === prefix && !query.next) {
           if (!this.grammar.prose && !predictions.length) return []
@@ -408,7 +413,7 @@ export class WordPredictor {
         const confidence = bestWeight < 1 ? typoConfidence(bestScore, sum, summoned) : query.next ? bestScore : bestScore / (sum || 1)
         const gate = query.next
           ? bestScore >= CONFIDENCE
-          : confidence! >= threshold || (exactConfident && bestScore >= EXACT_RATIO * exact)
+          : confidence! >= threshold && (!this.grammar.prose || bestScore >= EXACT_RATIO * exact)
         if (!bestScore || confidence === undefined || (bestWeight === 1 && !gate && !summoned)) {
           if (!predictions.length) return []
           continue
@@ -429,7 +434,7 @@ export class WordPredictor {
     }
     const completion = suggest()
     if (completion.length || query.next || prefixLength < 3 || slash || prefix.endsWith("'") || candidates.has(prefix) || !this.grammar.prose) return lead(completion)
-    const protectEnding = this.known.has(prefix.slice(0, -1))
+    const protectEnding = this.known.has([...prefix].slice(0, -1).join(""))
     for (const word of this.nearbyWords(prefix)) {
       if (candidates.has(word)) continue
       const weight = typoWeight(prefix, word, false, protectEnding)

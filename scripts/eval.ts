@@ -19,6 +19,15 @@ const dbPath = value("--db") ?? join(homedir(), ".local/share/opencode/opencode.
 const promptsPath = value("--prompts")
 const freezePath = value("--freeze")
 const measureAlternatives = flag("--alternatives")
+const showReplacements = flag("--replacements")
+
+if (flag("--probes")) {
+  const { printProbes, runProbes } = await import("./probes")
+  const probes = runProbes()
+  if (flag("--json")) console.log(JSON.stringify(probes))
+  else printProbes(probes)
+  process.exit(0)
+}
 
 type Prompt = { id: string; text: string }
 type Corpus = { prose: Prompt[]; shell: Prompt[] }
@@ -87,6 +96,10 @@ function partition(prompts: Prompt[]) {
     : { train: prompts.slice(0, valEnd), test: prompts.slice(valEnd) }
 }
 
+function changesPrefix(prediction: Prediction, typed: string): boolean {
+  return !prediction.word.startsWith(proseGrammar.normalize(typed))
+}
+
 function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
   const { train, test } = partition(prompts)
   const model = new PersonalModel(undefined, grammar)
@@ -103,6 +116,8 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
     nextPositions: 0, nextShown: 0, nextTop1: 0, nextWrong: 0, nextSaved: 0,
     bigramKnown: 0, bigramMissed: 0, bigramMissedNoSuggestion: 0, bigramMissedWrongList: 0,
     endPositions: 0, endShown: 0, endHarmless: 0, endWrong: 0,
+    endWrongKinds: { longer: 0, apostrophe: 0, replacement: 0 },
+    replaceChanging: 0, replacePreserving: 0, endReplaceChanging: 0,
   }
   const missed = new Map<string, number>()
   const alternatives = { wordsTop3: 0, wordsTop3WithSummon: 0, automaticSaved: 0, cycleSaved: 0, netSaved: 0, cyclePresses: 0, summonPresses: 0, acceptPresses: 0 }
@@ -194,6 +209,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
           if (matches(candidates[0], offset)) {
             if (first < 0) first = k
           } else {
+            if (candidates[0].replace) m[changesPrefix(candidates[0], query.prefix) ? "replaceChanging" : "replacePreserving"]++
             m.wrongShown++
             wrongByPrefix[k >= 4 ? "4+" : String(k)]++
           }
@@ -205,7 +221,15 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
           if (endCandidates.length) {
             m.endShown++
             if (matches(endCandidates[0], end)) m.endHarmless++
-            else m.endWrong++
+            else {
+              m.endWrong++
+              const top = endCandidates[0]
+              const typed = grammar.normalize(ending.prefix)
+              if (!top.replace) m.endWrongKinds.longer++
+              else if (top.word.replaceAll("'", "") === typed) m.endWrongKinds.apostrophe++
+              else m.endWrongKinds.replacement++
+              if (top.replace && changesPrefix(top, ending.prefix)) m.endReplaceChanging++
+            }
           }
         }
         if (first > 0) {
@@ -261,6 +285,11 @@ if (flag("--json")) {
       ["next-word shown / top-1 / wrong", `${m.nextShown} / ${m.nextTop1} / ${m.nextWrong}`],
       ["complete-word positions", m.endPositions],
       ["  shown / harmless / wrong", `${m.endShown} / ${m.endHarmless} / ${m.endWrong}`],
+      ["  longer / apostrophe / replaced", Object.values(m.endWrongKinds).join(" / ")],
+      ...(showReplacements ? [
+        ["wrong replacements in a word", `${m.replaceChanging} changing the prefix / ${m.replacePreserving} preserving it`],
+        ["wrong replacements at word end", `${m.endReplaceChanging} changing the prefix`],
+      ] as [string, string][] : []),
       ["known bigram missing target", `${m.bigramMissed} of ${m.bigramKnown}`],
       ["  no suggestion / wrong list", `${m.bigramMissedNoSuggestion} / ${m.bigramMissedWrongList}`],
     ]

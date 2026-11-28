@@ -130,6 +130,36 @@ test("alternative replay charges for cycling and accepting", () => {
 
 test("scores the complete-word position separately from prefix positions", () => {
   const result = metrics("deploy locally", "deploy local")
-  expect(result).toMatchObject({ endPositions: 2, endShown: 1, endHarmless: 0, endWrong: 1 })
+  expect(result).toMatchObject({ endPositions: 2, endShown: 1, endHarmless: 0, endWrong: 1, endWrongKinds: { longer: 1, apostrophe: 0, replacement: 0 }, endReplaceChanging: 0 })
   expect(metrics("deploy locally", "deploy locally")).toMatchObject({ endShown: 0, endHarmless: 0, endWrong: 0 })
+})
+
+test("classifies a restored apostrophe at a completed word as a prefix-changing replacement", () => {
+  const result = metrics("we can't", "we cant")
+  expect(result).toMatchObject({ endShown: 1, endWrong: 1, endWrongKinds: { longer: 0, apostrophe: 1, replacement: 0 }, endReplaceChanging: 1 })
+})
+
+test("prints replacement counters only on request", () => {
+  withTemp((directory) => {
+    const path = join(directory, "prompts.json")
+    writeFileSync(path, JSON.stringify(["we can't", "we can't", "we can't", "we cant"].map((text, id) => ({ id: String(id), text }))))
+    expect(run("--prompts", path).stdout.toString()).not.toContain("wrong replacements")
+    expect(run("--prompts", path, "--replacements").stdout.toString()).toMatch(/wrong replacements at word end\s+1 changing the prefix/)
+  })
+})
+
+test("probes use only synthetic text and need no history", () => {
+  const execution = run("--probes", "--json", "--db", "/nonexistent/history.db")
+  expect(execution.stderr.toString()).toBe("")
+  expect(execution.exitCode).toBe(0)
+  const probes = JSON.parse(execution.stdout.toString())
+  expect(Object.keys(probes.typos)).toEqual(["swap", "missing", "doubled", "extra", "wrong"])
+  for (const outcome of Object.values<any>(probes.typos)) {
+    expect(outcome.total).toBeGreaterThan(50)
+    expect(outcome.replaced + outcome.appended).toBeLessThanOrEqual(outcome.total)
+  }
+  expect(probes.typos.swap.replaced).toBeGreaterThan(probes.typos.extra.replaced)
+  expect(probes.apostrophes).toEqual({ total: 8, cold: 0, learned: 7 })
+  expect(probes.technicalTranspositions).toEqual({ total: 4, cold: 0, learned: 4 })
+  expect(run("--probes", "--db", "/nonexistent/history.db").stdout.toString()).toContain("missing apostrophe, cold / learned  0 / 7 of 8")
 })

@@ -238,25 +238,9 @@ Cycling skips suggestions that don't fit on the cursor row. Up and Down keep
 their normal behavior when no picker is visible.
 
 Each key may be bound to only one action, and keys must not contain commas;
-invalid options fail at startup. Bindings can also be overridden with
-OpenCode's standard `keybinds` map in `cli.json`, using the command ids
-`quill.accept`, `quill.dismiss`, `quill.next`, `quill.previous` and
-`quill.summon`:
-
-```jsonc
-{
-  "keybinds": {
-    "quill.accept": "tab",
-    "quill.dismiss": "ctrl+g",
-    "quill.next": "alt+n",
-    "quill.previous": "alt+p",
-    "quill.summon": "ctrl+y"
-  }
-}
-```
-
-Hints in the picker and counter show the first displayable shortcut for each
-command.
+invalid options fail at startup. Keys are set only with these options;
+OpenCode's `keybinds` map does not rebind Quill's commands. Hints in the
+picker and counter show the first displayable key for each action.
 
 Quill's accept/dismiss/cycle layer runs in base mode at priority `2`, only in
 the focused normal composer. A visible suggestion takes Tab/Right for
@@ -314,12 +298,13 @@ Quill learns from your own submitted prompts, never from assistant output:
 - **Confidence gating:** a suggestion is shown only when it clears a
   confidence threshold, which is stricter for next-word predictions than for
   prefix completions. In prose, single-letter prefixes and two-letter prefixes
-  without repeated context also require higher confidence. If a typed prose
-  prefix of two or more letters is already a confident word, a longer
-  word is also offered when it scores at least 40% as high in the current
-  context (typing `local` offers `locally`); the two-letter guard raises the
-  confidence that offer needs as well. Shell mode shows nothing when
-  the typed command is already the most likely word.
+  without repeated context also require higher confidence. When the typed prose
+  prefix is itself a known word, a longer word is offered only if it clears
+  the same confidence and scores at least 70% as high as the typed word in the
+  current context (typing `local` offers `locally` when it is nearly as
+  likely); the two-letter guard raises the confidence that offer needs as
+  well. Shell mode shows nothing when the typed command is already the most
+  likely word.
 - **Typo fallback:** when prefix completion is not confident enough, nearby
   words are ranked with an edit penalty and a stricter confidence threshold.
   Correction confidence is the edit-penalized model score. Suggestions must
