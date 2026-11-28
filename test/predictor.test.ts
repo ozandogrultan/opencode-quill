@@ -684,8 +684,11 @@ test("offers a strong longer word when the typed word is already complete", () =
     model.observe(pairs.flatMap(([text, count]) => Array(count).fill(text)).map((text, index) => ({ id: String(index), text })))
     predictor.setPersonal(model.snapshot())
   }
-  learn([["run local tests", 6], ["run locally now", 4]])
+  learn([["run local tests", 6], ["run locally now", 5]])
   expect(complete(predictor, "run local")).toMatchObject({ word: "locally", suffix: "ly" })
+  learn([["run local tests", 10], ["run locally now", 6]])
+  expect(complete(predictor, "run local")).toBeUndefined()
+  expect(predictor.candidates(completionQuery("run local", 9)!, 5, true).map(({ word }) => word)).toContain("locally")
   learn([["run local tests", 20], ["run locally now", 2]])
   expect(complete(predictor, "run local")).toBeUndefined()
 })
@@ -803,7 +806,7 @@ test("learned context can restore a missing contraction apostrophe without repla
 })
 
 test("a final wrong letter after a known word does not trigger a longer partial typo repair", () => {
-  const predictor = new WordPredictor(frequencies)
+  const predictor = new WordPredictor([{ word: "please", count: 1000 }, { word: "complete", count: 300 }, { word: "completely", count: 600 }])
   expect(complete(predictor, "please completex")).toBeUndefined()
   expect(complete(predictor, "please complet")).toMatchObject({ word: "completely", suffix: "ely" })
 })
@@ -839,4 +842,15 @@ test("a learned contraction leads the ranked list so other completions stay reac
   expect(new Set(list.map(({ word }) => word)).size).toBe(list.length)
   expect(predictor.candidates(query)[0]).toMatchObject({ word: "can't", replace: 4 })
   expect(predictor.candidates(query, 5, false, false).map(({ word }) => word)).not.toContain("can't")
+})
+
+test("spelling guards count code points, not UTF-16 units", () => {
+  const predictor = new WordPredictor([{ word: "𝐚bce", count: 10 }])
+  expect(complete(predictor, "𝐚bcd")).toBeUndefined()
+})
+
+test("equal spelling repairs abstain even when their float scores differ", () => {
+  const predictor = new WordPredictor([{ word: "abcdef", count: 2 }, { word: "abcez", count: 3 }, { word: "filler", count: 997 }])
+  expect(complete(predictor, "abcef")).toBeUndefined()
+  expect(predictor.candidates(completionQuery("abcef", 5)!, 5, true).map(({ word }) => word).sort()).toEqual(["abcdef", "abcez"])
 })

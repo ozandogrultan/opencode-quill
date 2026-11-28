@@ -314,12 +314,13 @@ Quill learns from your own submitted prompts, never from assistant output:
 - **Confidence gating:** a suggestion is shown only when it clears a
   confidence threshold, which is stricter for next-word predictions than for
   prefix completions. In prose, single-letter prefixes and two-letter prefixes
-  without repeated context also require higher confidence. If a typed prose
-  prefix of two or more letters is already a confident word, a longer
-  word is also offered when it scores at least 40% as high in the current
-  context (typing `local` offers `locally`); the two-letter guard raises the
-  confidence that offer needs as well. Shell mode shows nothing when
-  the typed command is already the most likely word.
+  without repeated context also require higher confidence. When the typed prose
+  prefix is itself a known word, a longer word is offered only if it clears
+  the same confidence and scores at least 70% as high as the typed word in the
+  current context (typing `local` offers `locally` when it is nearly as
+  likely); the two-letter guard raises the confidence that offer needs as
+  well. Shell mode shows nothing when the typed command is already the most
+  likely word.
 - **Typo fallback:** when prefix completion is not confident enough, nearby
   words are ranked with an edit penalty and a stricter confidence threshold.
   Correction confidence is the edit-penalized model score. Suggestions must
