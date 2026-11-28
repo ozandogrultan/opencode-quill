@@ -226,7 +226,7 @@ function evaluate(grammar: Grammar, prompts: Prompt[], examples: boolean) {
               const top = endCandidates[0]
               const typed = grammar.normalize(ending.prefix)
               if (!top.replace) m.endWrongKinds.longer++
-              else if (top.word.replace("'", "") === typed) m.endWrongKinds.apostrophe++
+              else if (top.word.replaceAll("'", "") === typed) m.endWrongKinds.apostrophe++
               else m.endWrongKinds.replacement++
               if (top.replace && changesPrefix(top, ending.prefix)) m.endReplaceChanging++
             }
