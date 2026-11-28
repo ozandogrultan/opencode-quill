@@ -238,25 +238,9 @@ Cycling skips suggestions that don't fit on the cursor row. Up and Down keep
 their normal behavior when no picker is visible.
 
 Each key may be bound to only one action, and keys must not contain commas;
-invalid options fail at startup. Bindings can also be overridden with
-OpenCode's standard `keybinds` map in `cli.json`, using the command ids
-`quill.accept`, `quill.dismiss`, `quill.next`, `quill.previous` and
-`quill.summon`:
-
-```jsonc
-{
-  "keybinds": {
-    "quill.accept": "tab",
-    "quill.dismiss": "ctrl+g",
-    "quill.next": "alt+n",
-    "quill.previous": "alt+p",
-    "quill.summon": "ctrl+y"
-  }
-}
-```
-
-Hints in the picker and counter show the first displayable shortcut for each
-command.
+invalid options fail at startup. Keys are set only with these options;
+OpenCode's `keybinds` map does not rebind Quill's commands. Hints in the
+picker and counter show the first displayable key for each action.
 
 Quill's accept/dismiss/cycle layer runs in base mode at priority `2`, only in
 the focused normal composer. A visible suggestion takes Tab/Right for
