@@ -4,6 +4,12 @@ All notable changes are documented in this file using
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [0.10.5] - 2026-11-28
+
+### Fixed
+
+- **options:** Warn when an action loses its default keys, with eval follow-ups (#43)
+
 ## [0.10.4] - 2026-11-28
 
 ### Fixed
@@ -223,6 +229,7 @@ All notable changes are documented in this file using
 - `/quill` command and command palette action to toggle autocomplete.
 - Local installer script, full test suite, CI workflows, and release tooling.
 
+[0.10.5]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/ozandogrultan/opencode-quill/compare/v0.10.1...v0.10.2
