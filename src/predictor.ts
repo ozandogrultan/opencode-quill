@@ -18,7 +18,6 @@ const CONFIDENCE = 0.3
 const SHORT_CONFIDENCE = 0.4
 const EXACT_RATIO = 0.7
 const FRAGMENT_RATIO = 3
-const TIE_EPSILON = 1e-9
 const MIN_TYPO_SCORE = 0.000001
 const PRIOR_LIMIT = 20_000
 const WORD_LIMIT = 8000
@@ -395,12 +394,12 @@ export class WordPredictor {
         const score = base * weight
         sum += score
         if (this.minSuggestedWordLength && word !== prefix && [...word].length < this.minSuggestedWordLength) continue
-        ranked.push({ word, score, weight })
-        ranked.sort((a, b) => Math.abs(a.score - b.score) <= TIE_EPSILON * Math.max(a.score, b.score) ? (a.word < b.word ? -1 : 1) : b.score - a.score)
+        ranked.push({ word, score: Number(score.toPrecision(12)), weight })
+        ranked.sort((a, b) => b.score - a.score || (a.word < b.word ? -1 : 1))
         if (ranked.length > retained + (this.grammar.prose && candidates.has(prefix) && !query.next ? 1 : 0)) ranked.pop()
       }
       const [best, runnerUp] = ranked
-      if (typos && !summoned && best && runnerUp && best.weight < 1 && Math.abs(best.score - runnerUp.score) <= TIE_EPSILON * Math.max(best.score, runnerUp.score)) return []
+      if (typos && !summoned && best && runnerUp && best.weight < 1 && best.score === runnerUp.score) return []
       const predictions: Prediction[] = []
       const exact = query.next ? 0 : ranked.find(({ word }) => word === prefix)?.score ?? 0
       const short = prefixLength < 2

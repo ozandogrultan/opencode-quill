@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test"
-import { pairedBootstrap } from "../scripts/bootstrap"
+import { bootstrapReport, pairedBootstrap, type PerPrompt } from "../scripts/bootstrap"
 import { Database } from "bun:sqlite"
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -223,4 +223,44 @@ test("paired bootstrap excludes zero for a clear shift and includes it for none"
   const flat = pairedBootstrap(noise)
   expect(flat.excludesZero).toBe(false)
   expect(pairedBootstrap(noise)).toEqual(flat)
+})
+
+test("paired bootstrap rejects files that are not comparable and reports skipped alternatives", () => {
+  const file = (over: Partial<PerPrompt> = {}): PerPrompt => ({
+    metrics: ["prefixSaved", "words"], split: "val", online: false, alternatives: false,
+    prose: [[1, 3], [2, 4], [0, 5]], ...over,
+  })
+  expect(bootstrapReport(file(), file())).toContain("chars saved, prefix")
+  expect(bootstrapReport(file(), file({ prose: [[2, 3], [3, 4], [1, 5]] }), 50)).toContain("better")
+  expect(() => bootstrapReport(file(), file({ prose: [[1, 3]] }))).toThrow("different numbers")
+  expect(() => bootstrapReport(file(), file({ split: "test" }))).toThrow("different splits")
+  expect(() => bootstrapReport(file(), file({ online: true }))).toThrow("--online")
+  expect(() => bootstrapReport(file(), file({ prose: [[1, 3], [2, 5], [0, 5]] }))).toThrow("different prompts")
+  expect(() => bootstrapReport(file(), file({ metrics: ["prefixSaved", "wordsTop1"] }))).toThrow("words column")
+  expect(bootstrapReport(file({ alternatives: true }), file())).toContain("net saved, alternatives skipped")
+})
+
+test("frozen prompts are sorted by time only when every prompt has one", () => {
+  const rows = [{ id: "a", text: "unique zebra crossing" }, ...["b", "c", "d", "e"].map((id) => ({ id, text: "run tests" }))]
+  const testWords = (times: (number | undefined)[]) => withTemp((directory) => {
+    const path = join(directory, "frozen.json")
+    writeFileSync(path, JSON.stringify({ prose: rows.map((row, i) => ({ ...row, time: times[i] })), shell: [] }))
+    const execution = run("--prompts", path, "--json")
+    expect(execution.exitCode).toBe(0)
+    return JSON.parse(execution.stdout.toString()).prose.words
+  })
+  expect(testWords([5, 1, 2, 3, 4])).toBe(3)
+  expect(testWords([1, 2, 3, 4, 5])).toBe(2)
+  expect(testWords([1, 1, 1, 1, 1])).toBe(2)
+  expect(testWords([5, 1, 2, 3, undefined])).toBe(2)
+})
+
+test("json output records the replay mode", () => {
+  withTemp((directory) => {
+    const path = join(directory, "prompts.json")
+    writeFileSync(path, JSON.stringify([1, 2, 3, 4, 5].map((id) => ({ id: String(id), text: "run tests" }))))
+    const json = (...extra: string[]) => JSON.parse(run("--prompts", path, "--json", ...extra).stdout.toString())
+    expect(json()).toMatchObject({ online: false, alternatives: false })
+    expect(json("--online", "--alternatives")).toMatchObject({ online: true, alternatives: true })
+  })
 })

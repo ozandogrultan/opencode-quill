@@ -244,7 +244,7 @@ Each key may be bound to only one action, and keys must not contain commas.
 A key repeated within a list is kept once. A key already bound by an earlier
 configured list (order: `acceptKeys`, `dismissKeys`, `cycleNextKeys`,
 `cyclePreviousKeys`, `summonKeys`) and any key containing a comma is dropped
-with a warning toast. A configured key replaces the same key in another action's
+with one warning toast, which also names an action left without keys. A configured key replaces the same key in another action's
 default, so `dismissKeys: ["right"]` leaves `acceptKeys` as `["tab"]`.
 Options of the wrong type fail at startup. Keys are set only with these options;
 OpenCode's `keybinds` map does not rebind Quill's commands. Hints in the

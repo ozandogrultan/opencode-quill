@@ -15,7 +15,7 @@ export default Plugin.define({
   id: "quill",
   setup(context) {
     const options = resolveOptions(context.options)
-    for (const message of options.warnings) context.ui.toast.show({ title: "Quill", message, variant: "warning" })
+    if (options.warnings.length) context.ui.toast.show({ title: "Quill", message: options.warnings.join("\n"), variant: "warning" })
     const [settings, setSettings] = context.storage.store("settings", {
       initial: { enabled: options.enabled, shell: options.completeShell },
     })

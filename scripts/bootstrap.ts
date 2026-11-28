@@ -1,4 +1,4 @@
-type PerPrompt = { metrics: string[]; alternatives?: boolean; prose: number[][] }
+export type PerPrompt = { metrics: string[]; split?: string; online?: boolean; alternatives?: boolean; prose: number[][] }
 
 const REPORTED: [string, string, boolean][] = [
   ["wrongShown", "wrong shown", false],
@@ -39,14 +39,21 @@ export function pairedBootstrap(differences: number[], resamples = 2000, seed = 
 export function bootstrapReport(before: PerPrompt, after: PerPrompt, resamples = 2000, seed = 1): string {
   if (before.prose.length !== after.prose.length) throw new Error("per-prompt files cover different numbers of prompts")
   if (!before.prose.length) throw new Error("per-prompt files are empty")
+  if (before.split !== after.split) throw new Error(`per-prompt files use different splits (${before.split} and ${after.split})`)
+  if (before.online !== after.online) throw new Error("per-prompt files differ in --online replay")
+  const words = [before.metrics.indexOf("words"), after.metrics.indexOf("words")]
+  if (words[0] < 0 || words[1] < 0) throw new Error("per-prompt files lack the words column")
+  if (before.prose.some((row, i) => row[words[0]] !== after.prose[i][words[1]])) throw new Error("per-prompt files cover different prompts (words per prompt differ)")
+  const comparable = !!(before.alternatives && after.alternatives)
   const lines = [`paired bootstrap: ${before.prose.length} prompts, ${resamples} resamples, seed ${seed}; difference = after - before, summed over prompts`]
   for (const [key, label, higherIsBetter] of REPORTED) {
     const column = before.metrics.indexOf(key)
     const other = after.metrics.indexOf(key)
-    if (column < 0 || other < 0 || (key === "netSaved" && !(before.alternatives && after.alternatives))) continue
+    if (column < 0 || other < 0 || (key === "netSaved" && !comparable)) continue
     const { total, low, high, excludesZero } = pairedBootstrap(before.prose.map((row, i) => after.prose[i][other] - row[column]), resamples, seed)
     const verdict = !excludesZero ? "CI includes 0" : (total > 0) === higherIsBetter ? "better, CI excludes 0" : "worse, CI excludes 0"
     lines.push(`  ${label.padEnd(26)}${String(total).padStart(7)}  95% CI [${low}, ${high}]  ${verdict}`)
   }
+  if (!comparable) lines.push("  net saved, alternatives skipped: both files need --alternatives")
   return lines.join("\n")
 }

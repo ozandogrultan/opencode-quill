@@ -862,3 +862,22 @@ test("candidates whose scores differ only by float noise rank alphabetically", (
   const words = predictor.candidates(completionQuery("ze", 2)!, 5, true).map(({ word }) => word)
   expect(words).toEqual(["zea", "zeb"])
 })
+
+test("three near-equal scores at the cut-off keep the alphabetical first words", () => {
+  const predictor = new WordPredictor(["zed", "zec", "zeb", "zea"].map((word) => ({ word, count: 5 })), proseGrammar)
+  const noise: Record<string, number> = { zea: 1 + 4e-14, zeb: 1, zec: 1 - 4e-14, zed: 1 + 2e-14 }
+  spyOn(predictor as unknown as { score(word: string): number }, "score").mockImplementation((word: string) => 0.4 * noise[word])
+  for (const maximum of [1, 2, 3]) {
+    const words = predictor.candidates(completionQuery("ze", 2)!, maximum, true).map(({ word }) => word)
+    expect(words).toEqual(["zea", "zeb", "zec"].slice(0, maximum))
+  }
+})
+
+test("a chain of near-equal scores ranks the same whatever the candidate order", () => {
+  const scores: Record<string, number> = { zea: 1, zeb: 1 + 8e-10, zec: 1 + 1.6e-9 }
+  for (const order of [["zea", "zeb", "zec"], ["zec", "zeb", "zea"], ["zeb", "zea", "zec"], ["zea", "zec", "zeb"]]) {
+    const predictor = new WordPredictor(order.map((word) => ({ word, count: 5 })), proseGrammar)
+    spyOn(predictor as unknown as { score(word: string): number }, "score").mockImplementation((word: string) => 0.4 * scores[word])
+    expect(predictor.candidates(completionQuery("ze", 2)!, 2, true).map(({ word }) => word)).toEqual(["zec", "zeb"])
+  }
+})
