@@ -33,7 +33,7 @@ test("commands fall through without an eligible suggestion", () => {
 })
 
 test("option parsing preserves host syntax and rejects invalid input", () => {
-  expect(resolveOptions({})).toEqual({ enabled: true, completeAtLineEnd: false, completeShell: true, minSuggestedWordLength: 0, acceptKeys: ["tab", "right"], dismissKeys: ["escape"], cycleNextKeys: [], cyclePreviousKeys: [], summonKeys: [] })
+  expect(resolveOptions({})).toEqual({ enabled: true, completeAtLineEnd: false, completeShell: true, minSuggestedWordLength: 0, acceptKeys: ["tab", "right"], dismissKeys: ["escape"], cycleNextKeys: [], cyclePreviousKeys: [], summonKeys: [], warnings: [] })
   expect(resolveOptions({ completeAtLineEnd: true }).completeAtLineEnd).toBe(true)
   expect(resolveOptions({ acceptKeys: [" ctrl+y ", "ctrl+y"] }).acceptKeys).toEqual(["ctrl+y"])
   for (const input of [{ enabled: "yes" }, { completeAtLineEnd: "yes" }, { completeAtLineEnd: 1 }, { acceptKeys: false }, { acceptKeys: [""] }, { dismissKeys: [1] }, { cycleNextKeys: "tab" }, { cyclePreviousKeys: [null] }]) {
@@ -41,13 +41,23 @@ test("option parsing preserves host syntax and rejects invalid input", () => {
   }
 })
 
-test("keys must not overlap across actions or contain commas", () => {
-  expect(() => resolveOptions({ acceptKeys: ["tab"], summonKeys: ["Tab"] })).toThrow("Quill Tab is bound in both acceptKeys and summonKeys")
-  expect(() => resolveOptions({ cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+n"] })).toThrow("bound in both cycleNextKeys and cyclePreviousKeys")
-  expect(() => resolveOptions({ dismissKeys: ["tab"] })).toThrow("bound in both acceptKeys and dismissKeys")
-  expect(() => resolveOptions({ acceptKeys: ["ctrl+,"] })).toThrow("acceptKeys must not contain commas")
-  expect(() => resolveOptions({ summonKeys: [","] })).toThrow("summonKeys must not contain commas")
-  expect(resolveOptions({ acceptKeys: ["tab"], dismissKeys: ["escape"], summonKeys: ["ctrl+y"], cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+p"] }).summonKeys).toEqual(["ctrl+y"])
+test("duplicate and comma keys are dropped with a warning", () => {
+  expect(resolveOptions({ acceptKeys: ["tab"], summonKeys: ["Tab"] })).toMatchObject({ acceptKeys: ["tab"], summonKeys: [], warnings: ["Tab in summonKeys ignored: already bound in acceptKeys"] })
+  expect(resolveOptions({ cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+n"] })).toMatchObject({ cycleNextKeys: ["alt+n"], cyclePreviousKeys: [], warnings: ["alt+n in cyclePreviousKeys ignored: already bound in cycleNextKeys"] })
+  expect(resolveOptions({ acceptKeys: ["ctrl+,", "ctrl+y"], summonKeys: [","] })).toMatchObject({ acceptKeys: ["ctrl+y"], summonKeys: [], warnings: ["ctrl+, in acceptKeys ignored: keys must not contain commas", ", in summonKeys ignored: keys must not contain commas"] })
+})
+
+test("a configured key takes over a default key from another action silently", () => {
+  expect(resolveOptions({ dismissKeys: ["right"] })).toMatchObject({ acceptKeys: ["tab"], dismissKeys: ["right"], warnings: [] })
+  expect(resolveOptions({ summonKeys: ["tab"] })).toMatchObject({ acceptKeys: ["right"], summonKeys: ["tab"], warnings: [] })
+})
+
+test("keys are deduplicated case-insensitively within a list", () => {
+  expect(resolveOptions({ acceptKeys: ["Tab", "tab", "ctrl+y"] })).toMatchObject({ acceptKeys: ["Tab", "ctrl+y"], warnings: [] })
+})
+
+test("valid configurations produce no warnings", () => {
+  expect(resolveOptions({ acceptKeys: ["tab"], dismissKeys: ["escape"], summonKeys: ["ctrl+y"], cycleNextKeys: ["alt+n"], cyclePreviousKeys: ["alt+p"] })).toMatchObject({ summonKeys: ["ctrl+y"], warnings: [] })
 })
 
 test("minimum word length accepts non-negative integers and rejects invalid values", () => {
@@ -116,7 +126,7 @@ test("parses quill slash commands into toggle, explicit enable, and clear", () =
   expect(parseQuillCommand("unknown")).toEqual({ type: "invalid" })
 })
 
-test("command ids stay stable so OpenCode keybinds can override them", () => {
+test("command ids stay stable and are not rebound by OpenCode keybinds", () => {
   const layer = completionLayer(resolveOptions({ summonKeys: ["ctrl+y"] }), () => undefined)
   expect(layer.commands!.filter((command) => command.id).map((command) => command.id)).toEqual(["quill.accept", "quill.dismiss", "quill.next", "quill.previous", "quill.summon"])
 })
